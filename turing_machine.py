@@ -7,8 +7,7 @@ An IntMachine contains two integer variables: one active and one inactive.
 It also contains a stack of integeres. The stack is represented by a list, where
 the end of the list (high indices) is the top of the stack, and the beginning of the
 list is bottom of the stack. In other words, popping gets you the last variable in
-the list. Only the active variable can be modified, and the only way it can be modified
-is through incrementation and decrementation.
+the list. Only the active variable can be modified.
 
 This model is meant to represent the capabilities of rocketlang, as defined here:
 https://github.com/PieMan2201/rocketlang
