@@ -65,6 +65,9 @@ class TuringMachine:
 
         self.state = action.next_state
 
+    """
+    Run this machine on the given string, returning True if it is in the language, false if not.
+    """
     def run(self, s):
         # Initialize values for this run
         self.tape = []
@@ -87,14 +90,18 @@ class TuringMachine:
             self.__apply_action(action)
         return True
 
+    """
+    Run this machine and print ACCEPT or REJECT and the machine's state at halt time.
+    """
     def run_and_print(self, s):
         result = self.run(s)
         print("ACCEPT" if result else "REJECT")
         print(self)
-        print('')
 
     def __str__(self):
-        return "Tape: {}\nHead: {}".format(''.join(self.tape), self.head)
+        tape = ''.join(self.tape)
+        head = ' ' * self.head + '^'
+        return "{}\n{}".format(tape, head)
 
 
 
