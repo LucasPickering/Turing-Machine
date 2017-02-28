@@ -129,15 +129,6 @@ class ExpandedMachine(IntMachine):
             self.push_active_var()
 
 
-Instruction = namedtuple('Instruction', '')
-
-class TuringMachine(ExpandedMachine):
-
-    def __init__(self, *rules):
-        super(TuringMachine, self).__init__()
-        self.rules = rules
-
-
 def main():
     pass
 
