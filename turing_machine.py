@@ -2,6 +2,7 @@
 
 from collections import namedtuple
 
+
 """
 An IntMachine contains two integer variables: one active and one inactive.
 It also contains a stack of integeres. The stack is represented by a list, where

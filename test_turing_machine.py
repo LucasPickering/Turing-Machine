@@ -3,8 +3,14 @@
 from collections import namedtuple
 
 
+# State is the name of the state
 Condition = namedtuple('Condition', 'state tape_symbol')
-Action = namedtuple('Action', 'new_symbol movement next_state')
+
+# action is one of 'L R W' meaning move left, move right, or write to tape
+# new_symbol is the symbol to write (irrelevant if aciton isn't 'W')
+# next_state is the name of the next state to move to
+Action = namedtuple('Action', 'action new_symbol next_state')
+
 
 class Language:
 
@@ -20,6 +26,7 @@ class Language:
         return self.func(symbol)
 
 ASCII = Language(lambda c: ord(c) < 128, 'ε')
+
 
 class TuringMachine:
 
@@ -44,24 +51,31 @@ class TuringMachine:
     """
     def add_instruction(self, condition, action):
         # Check the validity of both symbols
-            self.__check_symbol(condition.tape_symbol)
+        self.__check_symbol(condition.tape_symbol)
+        if action.new_symbol:
             self.__check_symbol(action.new_symbol)
-            self.instructions[condition] = action  # Add it to the instruction set
+
+        # Check the validity of the action symbol
+        if action.action not in ['L', 'R', 'W']:
+            raise ValueError("Illegal action: " + action.action)
+        self.instructions[condition] = action  # Add it to the instruction set
 
     def __apply_action(self, action):
-        self.tape[self.head] = action.new_symbol
 
         # Move the head and extend the tape if needed
-        if action.movement == 'L':
+        if action.action == 'L':
             self.head -= 1
             # If we hit the left end, extend the tape with an empty square
             if self.head < 0:
                 self.tape.insert(0, self.language.empty_symbol)
-        elif action.movement == 'R':
+        elif action.action == 'R':
             self.head += 1
             # If we hit the right end, extend the tape with an empty square
             if self.head >= len(self.tape):
                 self.tape.append(self.language.empty_symbol)
+        elif action.action == 'W':
+            # Write the next character to tape
+            self.tape[self.head] = action.new_symbol
 
         self.state = action.next_state
 
@@ -104,12 +118,13 @@ class TuringMachine:
         return "{}\n{}".format(tape, head)
 
 
-
 def main():
     machine = TuringMachine(['HALT'], 1)
-    machine.add_instruction(Condition(1, 'a'), Action('A', 'R', 2))
-    machine.add_instruction(Condition(2, 'b'), Action('B', 'R', 3))
-    machine.add_instruction(Condition(3, 'c'), Action('C', 'R', 'HALT'))
+    machine.add_instruction(Condition(1, 'a'), Action('W', 'A', 1))
+    machine.add_instruction(Condition(1, 'A'), Action('R', None, 2))
+    machine.add_instruction(Condition(2, 'b'), Action('W', 'B', 2))
+    machine.add_instruction(Condition(2, 'B'), Action('R', None, 3))
+    machine.add_instruction(Condition(3, 'c'), Action('W', 'C', 'HALT'))
 
     machine.run_and_print('abc')
 
