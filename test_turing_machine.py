@@ -40,7 +40,7 @@ class TuringMachine:
     Checks if the given symbol is in this machine's language. If not, raises a ValueError.
     Also raises a ValueError if the length of the supposed symbol is not 1.
     """
-    def __check_symbol(self, symbol):
+    def check_symbol(self, symbol):
         if len(symbol) != 1:
             raise ValueError("Not a single character: " + symbol)
         if not self.language.contains(symbol):
@@ -51,33 +51,41 @@ class TuringMachine:
     """
     def add_instruction(self, condition, action):
         # Check the validity of both symbols
-        self.__check_symbol(condition.tape_symbol)
+        self.check_symbol(condition.tape_symbol)
         if action.new_symbol:
-            self.__check_symbol(action.new_symbol)
+            self.check_symbol(action.new_symbol)
 
         # Check the validity of the action symbol
         if action.action not in ['L', 'R', 'W']:
             raise ValueError("Illegal action: " + action.action)
         self.instructions[condition] = action  # Add it to the instruction set
 
-    def __apply_action(self, action):
-
-        # Move the head and extend the tape if needed
+    def apply_action(self, action):
+        # Move the head and extend the tape if needed, or write the character
         if action.action == 'L':
-            self.head -= 1
-            # If we hit the left end, extend the tape with an empty square
-            if self.head < 0:
-                self.tape.insert(0, self.language.empty_symbol)
+            self.move_left()
         elif action.action == 'R':
-            self.head += 1
-            # If we hit the right end, extend the tape with an empty square
-            if self.head >= len(self.tape):
-                self.tape.append(self.language.empty_symbol)
+            self.move_right()
         elif action.action == 'W':
             # Write the next character to tape
-            self.tape[self.head] = action.new_symbol
+            self.write_symbol(action.new_symbol)
 
         self.state = action.next_state
+
+    def move_left(self):
+        self.head -= 1
+        # If we hit the left end, extend the tape with an empty square
+        if self.head < 0:
+            self.tape.insert(0, self.language.empty_symbol)
+
+    def move_right(self):
+        self.head += 1
+        # If we hit the right end, extend the tape with an empty square
+        if self.head >= len(self.tape):
+            self.tape.append(self.language.empty_symbol)
+
+    def write_symbol(self, symbol):
+        self.tape[self.head] = symbol
 
     """
     Run this machine on the given string, returning True if it is in the language, false if not.
@@ -90,7 +98,7 @@ class TuringMachine:
 
         # Fill the tape, checking that each symbol is in the language while we're at it
         for symbol in s:
-            self.__check_symbol(symbol)
+            self.check_symbol(symbol)
             self.tape.append(symbol)
 
         # Loop until we reach an accepting state
@@ -101,7 +109,7 @@ class TuringMachine:
             except KeyError:
                 # No instruction, halt and return false
                 return False
-            self.__apply_action(action)
+            self.apply_action(action)
         return True
 
     """
@@ -109,8 +117,9 @@ class TuringMachine:
     """
     def run_and_print(self, s):
         result = self.run(s)
-        print("ACCEPT" if result else "REJECT")
         print(self)
+        print("ACCEPT" if result else "REJECT")
+        print("")
 
     def __str__(self):
         tape = ''.join(self.tape)
