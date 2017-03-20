@@ -1,0 +1,136 @@
+// This is a translated version of TM.rekt, with the commands being changed to something readable.
+
+// Assume for convenience that we load the input in reverse
+// order, and that 0 marks the end of the input.
+// So “foo” is read as “oof0”.  We could do this reversal in code, but it would make everything
+// even more obfuscated.  We do need to assume some convention for stopping the read.
+Read Input;
+Begin Loop;
+Push To Stack;
+Read Input;
+End Loop;  // End input-reading loop
+Push Zero;  // Treat 0 as blank, push this last so the head is over the initial blank.
+// Now our stack has the portion of the tape at the head and later, with deeper parts of the
+// stack representing later parts of the tape.
+// One of the two counters will be the portion of the tape before the head (currently empty),
+// and the other will hold our state.
+// State seems like the biggest hurdle.  Let initial state be 1 WLOG, and that way, we can let
+// the halting state be 0 and have the main loop of the program be checking the state for 0.
+Increment;  // Initial state is 1
+// ~~~~~~~~Main loop
+Begin Loop;
+// Now we need to check state and the character under the head.  And the only thing the “if”
+// can check against is the other variable.  We’re running out of wiggle room to do computations,
+// but we can trash the state once we’re in the right section of code, since it will get set to
+// something else.
+// We will count down and do different things depending on when the state reaches 0.
+// Push our other variable to the stack, then set it to 0
+Swap Vars;
+Push To Stack;
+Push Zero;
+Pop To Var;
+Swap Vars;  // State back in main variable
+// The next part depends on the Turing Machine we’re implementing, but we achieve a big
+// “switch” on the state with stuff like this:
+Decrement;  // decrement (man this language is hard to read)
+Begin If;
+// code for state = 1 here
+End If;
+Decrement;
+Begin If;
+// code for state = 2 here
+Decrement;
+// …etc up to maximum number of states.
+// Once we do find the correct block of code for state, we need to be able to
+// switch on the character at the original top of the stack, using a similar strategy.
+// We’re still holding the other stack encoded as a big number on top of it,
+// but we can play with both stacks to try to fix this situation.
+// The following code is in each of those state “if” blocks.
+Pop To Var; // cr1 has the stack bit we want to remember
+Swap Vars;          // cr2 has it now
+Pop To Var; // cr1 has the value to switch on
+Swap Vars;          // cr2 has the character, cr1 has the other stack
+Push To Stack;  // top of stack has other stack now
+Push Zero;
+Pop To Var; // 0 in current variable
+Swap Vars;     // character to switch on in cr1, 0 in cr2
+//  And now we can use the same strategy that we did on the state
+Begin If;  // if character is 0…
+// code for “if state and character are blah” here
+End If;
+Decrement;  // decrement the character
+Begin If;  // if character is 1…
+End If;
+// Etc.  In each block, we can immediately “Increment;” the correct number of times to get back the
+// character we’re decrementing.  Let’s also take down the other stack from our stack and put the character in the right place:
+Swap Vars;
+Pop To Var;
+Swap Vars;
+Push To Stack;   // cr1 is free, cr2 has tape before head
+// Finally, in each of these blocks, we’ve got to set a new state and either move left, move right,
+// or write.  Let’s handle setting a new state second.
+// Move right:  pop from stack, “multiply” by base and add on cr2
+Pop To Var;   // Assume error-handling off, so we can just get 0/blank when we pop empty stack
+Swap Vars;
+Increment; [x number of characters]
+Swap Vars;
+Begin Loop;  // add while the character is > 0
+Decrement;
+Swap Vars;
+Increment;
+Swap Vars;
+End Loop;
+// final configuration:  cr2 has new left-of-tape, cr1 free, stack has head-and-to-the-right
+
+// That wasn’t so bad.  Move left:  “divide” by base and put remainder on top of stack
+// Strategy:  Repeatedly subtract base until we’re negative, then add base back
+Push Zero;
+Push To Stack; // result of division init to 0
+Swap Vars;
+Begin Loop;
+Decrement; [repeat x base of characters]
+Swap Vars;
+Increment;
+Swap Vars;
+End Loop;
+Increment;  [x base of characters]   // now that’s our number!
+Push To Stack;   // and it’s on the stack!  Note that pushing doesn’t destroy original.
+Begin Loop;  // If the remainder isn’t 0, our last division shouldn’t count.
+Swap Vars;
+Decrement;
+Swap Vars;
+End Loop;
+Swap Vars;  // Count back up.
+Begin Loop;
+Decrement;
+Swap Vars;
+Increment; [x base of characters]
+Swap Vars;
+End Loop;
+Swap Vars;
+// Final config here: cr2 has prev tape stack, stack is correct, cr1 is free.
+
+// A write operation is pretty straightforward.
+Pop To Var;
+Push Zero;
+Pop To Var; // clobber what was written
+Increment; [x desired character value]
+Push To Stack;
+// cr2 has prev tape stack, stack is correct, cr1 is free.
+
+// And each of these options finally needs to set the state for the next
+// move — but, we’ve left a variable free, so this is easy.  One catch:
+// we’re going to hit all the decrements for the later if’s in the initial switches,
+// so count how many of those we hit and add that to the value we really want.
+// Also, add a large constant to ensure we don't accidentally trigger any other state if's
+// while we're decrementing.
+Increment;  [x desired state + any extra decrements we want to counteract + large constant].
+
+// At the very end of the loop, after all the if's, remove the large constant we used
+// to avoid triggering other if's along the way.
+Decrement;  [x large constant]
+End Loop;
+// Halt and done.  We could probably iterate through the stack and counter to print everything.
+// “Exercise for the reader” is what I say.
+
+// Whew!  Aw man, at least in programming Turing Machines the commands make sense…
