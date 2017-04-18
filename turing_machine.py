@@ -127,11 +127,11 @@ State is the name of the state
 Condition = namedtuple('Condition', 'state tape_symbol')
 
 """
-action is one of 'L R W' meaning move left, move right, or write to tape
-new_symbol is the symbol to write (irrelevant if aciton isn't 'W')
+function is one of 'L R W' meaning move left, move right, or write to tape
 next_state is the name of the next state to move to
+new_symbol is the symbol to write (irrelevant if action isn't 'W')
 """
-Action = namedtuple('Action', 'function next_state')
+Action = namedtuple('Action', 'function next_state new_symbol')
 
 
 class Language:
@@ -153,13 +153,29 @@ ASCII = Language(lambda c: ord(c) < 128, 'ε')
 
 class TuringMachine(ExpandedMachine):
 
+    VALID_ACTIONS = {'L', 'R', 'W'}
+
     def __init__(self, accepting_states, initial_state, language=ASCII):
         self.accepting_states = set(accepting_states)
         self.language = language
         self.initial_state = initial_state
         self.instructions = dict()
 
-    def check_symbol(self, symbol):
+    def add_instruction(self, condition, action):
+        """
+        Adds the given condition/action pair to this machine's instruction set.
+        """
+        # Check the validity of both symbols
+        self.__check_symbol(condition.tape_symbol)
+        if action.new_symbol:
+            self.__check_symbol(action.new_symbol)
+
+        if action.function not in self.VALID_ACTIONS:
+            raise ValueError("Invalid function: {}. Must be one of {}".format(action.function,
+                                                                              self.VALID_ACTIONS))
+        self.instructions[condition] = action  # Add it to the instruction set
+
+    def __check_symbol(self, symbol):
         """
         Checks if the given symbol is in this machine's language. If not, raises a ValueError.
         Also raises a ValueError if the length of the supposed symbol is not 1.
@@ -169,66 +185,40 @@ class TuringMachine(ExpandedMachine):
         if not self.language.contains(symbol):
             raise ValueError("Symbol not in language: " + symbol)
 
-    def add_instruction(self, condition, action):
-        """
-        Adds the given condition/action pair to this machine's instruction set.
-        """
-        # Check the validity of both symbols
-        self.check_symbol(condition.tape_symbol)
-        if action.new_symbol:
-            self.check_symbol(action.new_symbol)
+    def __apply_action(self, action):
+        if action.function == 'L':
+            self.__move_left()
+        elif action.function == 'R':
+            self.__move_right()
+        elif action.function == 'W':
+            self.__write_symbol(action.new_symbol)
+        self.__
 
-        # TODO check vailidity of action.function here
-        self.instructions[condition] = action  # Add it to the instruction set
-
-    def apply_action(self, action):
-        action.function()  # Run the function (left, right, or write)
-        self.set_state(action.next_state)  # Go to next state
-
-    def move_left(self):
+    def __move_left(self):
         self.head -= 1
         # If we hit the left end, extend the tape with an empty square
         if self.head < 0:
             self.tape.insert(0, self.language.empty_symbol)
 
-    def move_right(self):
+    def __move_right(self):
         self.head += 1
         # If we hit the right end, extend the tape with an empty square
         if self.head >= len(self.tape):
             self.tape.append(self.language.empty_symbol)
 
-    def write_symbol(self, symbol):
+    def __write_symbol(self, symbol):
         self.tape[self.head] = symbol
 
-    def set_state(self, next_state):
+    def __set_state(self, next_state):
         self.state = next_state
 
-    def run(self, s):
+    def __run(self, s):
         """
         Run this machine on the given string, returning True if it is in the language, false if not.
         """
-        # Initialize values for this run
-        self.tape = []
-        self.head = 0
-        self.state = self.initial_state
+        pass
 
-        # Fill the tape, checking that each symbol is in the language while we're at it
-        for symbol in s:
-            self.check_symbol(symbol)
-            self.tape.append(symbol)
-
-        # Loop until we reach an accepting state
-        while self.state not in self.accepting_states:
-            # Try to find an action for this state/symbol pair. If there is none, halt
-            try:
-                action = self.instructions[Condition(self.state, self.tape[self.head])]
-            except KeyError:
-                # No instruction, halt and return false
-                return False
-            self.apply_action(action)
-        return True
-
-    def run_and_print(self, s):
+    def __run_and_print(self, s):
         """
         Run this machine and print ACCEPT or REJECT and the machine's state at halt time.
         """
