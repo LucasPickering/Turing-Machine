@@ -20,88 +20,88 @@ class IntMachine:
         self.inactive_var = 0
         self.stack = []
 
-    """
-    Sets the active variable to the given character
-    "Take the shot!" from rocketlang
-    """
     def set_active_var(self, char):
-        if ord(c) >= 128:
+        """
+        Sets the active variable to the given character
+        "Take the shot!" from rocketlang
+        """
+        if ord(char) >= 128:
             raise TypeError("This machine only supports basic ASCII [0, 127]")
         self.active_var = ord(char)
 
-    """
-    Increments the active variable
-    "Wow!" from rocketlang
-    """
     def incr_var(self):
+        """
+        Increments the active variable
+        "Wow!" from rocketlang
+        """
         self.active_var += 1
 
-    """
-    Decrements the active variable
-    "Close One!" from rocketlang
-    """
     def decr_var(self):
+        """
+        Decrements the active variable
+        "Close One!" from rocketlang
+        """
         self.active_var -= 1
 
-    """
-    Copies the active variable to the inactive variable
-    "Whoops..." from rocketlang
-    """
     def save_active_var(self):
+        """
+        Copies the active variable to the inactive variable
+        "Whoops..." from rocketlang
+        """
         self.inactive_var = self.active_var
 
-    """
-    Swaps the values of the active and inactive variables
-    "OMG!" from rocketlang
-    """
     def swap(self):
+        """
+        Swaps the values of the active and inactive variables
+        "OMG!" from rocketlang
+        """
         temp = self.active_var
         self.active_var = self.inactive_var
         self.inactive_var = temp
 
-    """
-    Pushes the value 0 onto the stack
-    "Noooo!" from rocketlang
-    """
     def push_0(self):
+        """
+        Pushes the value 0 onto the stack
+        "Noooo!" from rocketlang
+        """
         self.stack.append(0)
 
-    """
-    Pops the item at the top of the stack, and sets active_var equal to that item
-    "Centering..." from rocketlang
-    """
     def pop_to_active_var(self):
-        active_var = stack.pop()
+        """
+        Pops the item at the top of the stack, and sets active_var equal to that item
+        "Centering..." from rocketlang
+        """
+        self.active_var = self.stack.pop()
 
-    """
-    Pushes the value of the active variable onto the stack
-    "Defending..." from rocketlang
-    """
     def push_active_var(self):
-        stack.append(active_var)
+        """
+        Pushes the value of the active variable onto the stack
+        "Defending..." from rocketlang
+        """
+        self.stack.append(self.active_var)
 
-    """
-    Runs a single if statement that only executes if the active variable is equal to the inactive
-    variable. Each given function is run in order, and must take self as a singular argument to
-    enforce that it is a function of this machine.
-    "Nice shot!" and "What a save!" from rocketlang - we could require the user to end every
-    function list with  "What a save!" equivalent to preserve better correlation with rocketlang,
-    but I think this shortcut is okay to take.
-    """
     def if_statement(self, funcs):
+        """
+        Runs a single if statement that only executes if the active variable is equal to the
+        inactive variable. Each given function is run in order, and must take self as a singular
+        argument to enforce that it is a function of this machine.
+        "Nice shot!" and "What a save!" from rocketlang - we could require the user to end every
+        function list with  "What a save!" equivalent to preserve better correlation with
+        rocketlang, but I think this shortcut is okay to take.
+        """
         if self.active_var == self.inactive_var:
             for func in funcs:
                 func(self)
 
-    """
-    Runs a loop that operates the given functions in order while the active variable is >0.
-    Each function is assumed to only take self as an argument, to enforce that they are all
-    functions of this machine
-    "Great pass!" and "Thanks!" from rocketlang - we could require the user to end every function
-    list with a "Thanks!" equivalent to preserve better correlation with rocketlang, but I think
-    this shortcut is okay to take.
-    """
     def loop(self, funcs):
+        """
+        Runs a loop that operates the given functions in order while the active variable is >0.
+        Each function is assumed to only take self as an argument, to enforce that they are all
+        functions of this machine
+        "Great pass!" and "Thanks!" from rocketlang - we could require the user to end every
+        function list with a "Thanks!" equivalent to preserve better correlation with rocketlang,
+        but I think this shortcut is okay to take.
+        """
         while self.active_var > 0:
             for func in funcs:
                 func(self)
@@ -113,21 +113,12 @@ class ExpandedMachine(IntMachine):
     functions to do it, so it doesn't add any more functionality.
     """
 
-    """
-    Resets the value of the active variable to 0
-    """
     def reset_active_var(self):
+        """
+        Resets the value of the active variable to 0
+        """
         self.push_0()  # Push 0 onto the stack
         self.pop_to_active_var()  # Pop 0 from the stack into the active variable
-
-    """
-    Writes the given string to the stack, as integer values. The last character in the string
-    will become the value at the top of the stack.
-    """
-    def write_string_to_stack(self, s):
-        for c in s:
-            self.set_active_var(c)
-            self.push_active_var()
 
 
 """
@@ -156,6 +147,7 @@ class Language:
     def contains(self, symbol):
         return self.func(symbol)
 
+
 ASCII = Language(lambda c: ord(c) < 128, 'ε')
 
 
@@ -167,20 +159,20 @@ class TuringMachine(ExpandedMachine):
         self.initial_state = initial_state
         self.instructions = dict()
 
-    """
-    Checks if the given symbol is in this machine's language. If not, raises a ValueError.
-    Also raises a ValueError if the length of the supposed symbol is not 1.
-    """
     def check_symbol(self, symbol):
+        """
+        Checks if the given symbol is in this machine's language. If not, raises a ValueError.
+        Also raises a ValueError if the length of the supposed symbol is not 1.
+        """
         if len(symbol) != 1:
             raise ValueError("Not a single character: " + symbol)
         if not self.language.contains(symbol):
             raise ValueError("Symbol not in language: " + symbol)
 
-    """
-    Adds the given condition/action pair to this machine's instruction set.
-    """
     def add_instruction(self, condition, action):
+        """
+        Adds the given condition/action pair to this machine's instruction set.
+        """
         # Check the validity of both symbols
         self.check_symbol(condition.tape_symbol)
         if action.new_symbol:
@@ -211,10 +203,10 @@ class TuringMachine(ExpandedMachine):
     def set_state(self, next_state):
         self.state = next_state
 
-    """
-    Run this machine on the given string, returning True if it is in the language, false if not.
-    """
     def run(self, s):
+        """
+        Run this machine on the given string, returning True if it is in the language, false if not.
+        """
         # Initialize values for this run
         self.tape = []
         self.head = 0
@@ -236,10 +228,10 @@ class TuringMachine(ExpandedMachine):
             self.apply_action(action)
         return True
 
-    """
-    Run this machine and print ACCEPT or REJECT and the machine's state at halt time.
-    """
     def run_and_print(self, s):
+        """
+        Run this machine and print ACCEPT or REJECT and the machine's state at halt time.
+        """
         result = self.run(s)
         print(self)
         print("ACCEPT" if result else "REJECT")
