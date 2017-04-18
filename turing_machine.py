@@ -80,7 +80,7 @@ class IntMachine:
         """
         self.stack.append(self.active_var)
 
-    def if_statement(self, funcs):
+    def if_statement(self, *funcs):
         """
         Runs a single if statement that only executes if the active variable is equal to the
         inactive variable. Each given function is run in order, and must take self as a singular
@@ -93,7 +93,7 @@ class IntMachine:
             for func in funcs:
                 func(self)
 
-    def loop(self, funcs):
+    def loop(self, *funcs):
         """
         Runs a loop that operates the given functions in order while the active variable is >0.
         Each function is assumed to only take self as an argument, to enforce that they are all
@@ -120,6 +120,16 @@ class ExpandedMachine(IntMachine):
         self.push_0()  # Push 0 onto the stack
         self.pop_to_active_var()  # Pop 0 from the stack into the active variable
 
+    def repeat(self, func, times):
+        """
+        Repeats the given function the given number of times. Techinically this isn't allowed
+        because we're using Python's for loops but if 'times' is a global constant, it's the same
+        same as hard-coding it to call the function that many times, so this just saves you from
+        some spaghetti code. Use wisely.
+        """
+        for i in range(times):
+            self.func()
+
 
 """
 State is the name of the state
@@ -134,30 +144,31 @@ new_symbol is the symbol to write (irrelevant if action isn't 'W')
 Action = namedtuple('Action', 'function next_state new_symbol')
 
 
-class Language:
+class Alphabet:
 
-    def __init__(self, func, empty_symbol):
+    def __init__(self, func, empty_symbol, size):
         self.func = func
         self.empty_symbol = empty_symbol
+        self.size = size
 
         # Make sure the empty symbol isn't the language, to avoid confusion
         if self.contains(empty_symbol):
-            raise ValueError("Empty symbol cannot be in the language")
+            raise ValueError("Empty symbol cannot be in the alphabet")
 
     def contains(self, symbol):
         return self.func(symbol)
 
 
-ASCII = Language(lambda c: ord(c) < 128, 'ε')
+ASCII = Alphabet(lambda c: ord(c) < 128, 'ε', 128)
 
 
 class TuringMachine(ExpandedMachine):
 
     VALID_ACTIONS = {'L', 'R', 'W'}
 
-    def __init__(self, accepting_states, initial_state, language=ASCII):
+    def __init__(self, accepting_states, initial_state, alphabet=ASCII):
         self.accepting_states = set(accepting_states)
-        self.language = language
+        self.alphabet = alphabet
         self.initial_state = initial_state
         self.instructions = dict()
 
@@ -177,15 +188,16 @@ class TuringMachine(ExpandedMachine):
 
     def __check_symbol(self, symbol):
         """
-        Checks if the given symbol is in this machine's language. If not, raises a ValueError.
+        Checks if the given symbol is in this machine's alphabet. If not, raises a ValueError.
         Also raises a ValueError if the length of the supposed symbol is not 1.
         """
         if len(symbol) != 1:
             raise ValueError("Not a single character: " + symbol)
-        if not self.language.contains(symbol):
-            raise ValueError("Symbol not in language: " + symbol)
+        if not self.alphabet.contains(symbol):
+            raise ValueError("Symbol not in alphabet: " + symbol)
 
     def __apply_action(self, action):
+        # These ifs are allowed because it's assumed that the TM can process its own program
         if action.function == 'L':
             self.__move_left()
         elif action.function == 'R':
@@ -195,16 +207,37 @@ class TuringMachine(ExpandedMachine):
         self.__
 
     def __move_left(self):
-        self.head -= 1
-        # If we hit the left end, extend the tape with an empty square
-        if self.head < 0:
-            self.tape.insert(0, self.language.empty_symbol)
+        """
+        Move left:  “divide” by base and put remainder on top of stack
+        Strategy:  Repeatedly subtract base until we’re negative, then add base back
+        """
+        # Potentially incorrect? KG's comment makes it sound like we're just trying to put 0 on the
+        # stack, but we push two different values.
+        self.push_0()
+        self.push_active_var()
+
+        self.swap()
+
+        # Loop
+        #   Subtract the alphabet size from the active variable
+        #   Swap variables
+        #   Increment the other variable (result of division)
+        #   Swap back so we can check if we've gone below 0 yet
+        self.loop(
+            # See ExpandedMachine.repeat for why that function is okay to use here
+            lambda: self.repeat(self.decr_var, self.alphabet.size),  # Subtract alphabet size
+            self.swap,
+            self.incr_var,
+            self.swap
+        )
+
+        self.repeat(self.incr_var, self.alphabet.size)  # Add the base back to get the remainder
 
     def __move_right(self):
         self.head += 1
         # If we hit the right end, extend the tape with an empty square
         if self.head >= len(self.tape):
-            self.tape.append(self.language.empty_symbol)
+            self.tape.append(self.alphabet.empty_symbol)
 
     def __write_symbol(self, symbol):
         self.tape[self.head] = symbol
