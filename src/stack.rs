@@ -1,10 +1,17 @@
+use std::io;
+use std::io::Bytes;
+use std::io::Read;
+use std::io::Stdin;
+use std::io::Stdout;
+use std::io::Write;
+
 type Value = i64;
 
 /// One step to run on the stack machine
 pub enum SmAction {
-    /// Sets the active variable to the given value.
+    /// Reads one byte from stdin and sets the active variable to it.
     /// "Take the shot!"
-    SetActive(Value),
+    ReadToActive,
 
     /// Increments the active variable.
     /// "Wow!"
@@ -51,18 +58,24 @@ pub enum SmAction {
 /// A direct equivalent of the rocketlang interpreter, equally as powerful.
 /// All other machines must be built on top of this, so we know they can be
 /// built in rocketlang.
-pub struct StackMachine {
+pub struct StackMachine<R: Read, W: Write> {
     active_var: Value,
     inactive_var: Value,
     stack: Vec<Value>,
+    reader: Bytes<R>,
+    writer: W,
 }
 
-impl StackMachine {
-    pub fn new() -> Self {
+impl<R: Read, W: Write> StackMachine<R, W> {
+    /// Creates a new machine that reads from the given reader and writes to
+    /// the given writer.
+    pub fn new(reader: R, writer: W) -> Self {
         Self {
             active_var: 0,
             inactive_var: 0,
             stack: vec![],
+            reader: reader.bytes(),
+            writer,
         }
     }
 
@@ -73,8 +86,12 @@ impl StackMachine {
     /// Runs a single action on this machine.
     fn run_action(&mut self, action: &SmAction) {
         match action {
-            SmAction::SetActive(value) => {
-                self.active_var = *value;
+            SmAction::ReadToActive => {
+                // Read one byte from stdin
+                // TODO: This is bad
+                self.active_var =
+                    self.reader.next().and_then(|result| result.ok()).unwrap()
+                        as i64;
             }
             SmAction::IncrActive => {
                 self.active_var += 1;
@@ -126,41 +143,48 @@ impl StackMachine {
     }
 }
 
+impl StackMachine<Stdin, Stdout> {
+    /// Creates a new machine that reads from stdin and writes to stdout.
+    pub fn new_std() -> Self {
+        Self::new(io::stdin(), io::stdout())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_get_active() {
-        let mut sm = StackMachine::new();
-        sm.run(&[SmAction::SetActive(10)]);
-        assert_eq!(sm.get_active(), 10);
+        let mut sm = StackMachine::new_std();
+        sm.run(&[SmAction::IncrActive]);
+        assert_eq!(sm.get_active(), 1);
     }
 
     #[test]
-    fn test_set_active() {
-        let mut sm = StackMachine::new();
-        sm.run(&[SmAction::SetActive(10)]);
-        assert_eq!(sm.active_var, 10);
+    fn test_read_to_active() {
+        let mut sm = StackMachine::new(&b"\x09"[..], Vec::new());
+        sm.run(&[SmAction::ReadToActive]);
+        assert_eq!(sm.active_var, 9);
     }
 
     #[test]
     fn test_incr_active() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::IncrActive]);
         assert_eq!(sm.active_var, 1);
     }
 
     #[test]
     fn test_decr_active() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::DecrActive]);
         assert_eq!(sm.active_var, -1);
     }
 
     #[test]
     fn test_save_active() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::IncrActive, SmAction::SaveActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 1);
@@ -168,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_swap() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::IncrActive, SmAction::Swap]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
@@ -176,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_push_0() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::IncrActive, SmAction::Push0]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[0]);
@@ -184,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_push_active() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::IncrActive, SmAction::PushActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[1]);
@@ -192,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_pop_to_active() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::IncrActive, SmAction::Push0, SmAction::PopToActive]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(&sm.stack, &[]);
@@ -201,13 +225,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "Pop on empty")]
     fn test_pop_to_active_on_empty() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         sm.run(&[SmAction::PopToActive]);
     }
 
     #[test]
     fn test_if_positive() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         // If DOES run
         sm.run(&[SmAction::If(vec![SmAction::IncrActive, SmAction::Swap])]);
         assert_eq!(sm.active_var, 0);
@@ -216,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_if_negative() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         // If DOESN'T run
         sm.run(&[SmAction::IncrActive, SmAction::If(vec![SmAction::Swap])]);
         assert_eq!(sm.active_var, 1);
@@ -225,10 +249,12 @@ mod tests {
 
     #[test]
     fn test_while() {
-        let mut sm = StackMachine::new();
+        let mut sm = StackMachine::new_std();
         // If DOESN'T run
         sm.run(&[
-            SmAction::SetActive(3),
+            SmAction::IncrActive,
+            SmAction::IncrActive,
+            SmAction::IncrActive,
             SmAction::While(vec![SmAction::Push0, SmAction::DecrActive]),
         ]);
         assert_eq!(sm.active_var, 0);

@@ -1,6 +1,10 @@
 mod stack;
 mod turing;
 
+use std::collections::HashMap;
+use turing::TuringMachine;
+
 fn main() {
-    println!("Hello, world!");
+    let tm = TuringMachine::new(HashMap::new());
+    tm.run("".to_string());
 }
