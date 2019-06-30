@@ -1,6 +1,7 @@
 use crate::stack::SmAction;
 use crate::stack::StackMachine;
 use std::collections::HashMap as Map;
+use std::io;
 
 type State = String;
 type Char = u8; // Will be truncated to 7 bits - ASCII only
@@ -33,7 +34,7 @@ impl TuringMachine {
     }
 
     pub fn run(&self, input: String) {
-        let mut machine = StackMachine::new_std();
+        let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
         machine.run(&self.actions);
     }
 
@@ -41,8 +42,18 @@ impl TuringMachine {
         instruction_table: Map<InstructionLookup, Instruction>,
     ) -> Vec<SmAction> {
         vec![
+            // Read the input string onto the tape. For convenience, assume the
+            // input is reversed and terminated with a 0, e.g. "foo" is
+            // actually "oof0".
             SmAction::ReadToActive,
             SmAction::While(vec![SmAction::PushActive, SmAction::ReadToActive]),
+            SmAction::Push0,
+            // Now the stack will hold the portion of the tape at and right of
+            // the head. One counter will have the tape left of the head
+            // (encoded as a number) and the other counter will have the state
+            SmAction::IncrActive,
+            // The main loop
+            SmAction::While(vec![]),
         ]
     }
 }

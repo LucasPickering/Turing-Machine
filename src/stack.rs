@@ -9,9 +9,13 @@ type Value = i64;
 
 /// One step to run on the stack machine
 pub enum SmAction {
-    /// Reads one byte from stdin and sets the active variable to it.
+    /// Reads one byte from input and sets the active variable to it.
     /// "Take the shot!"
     ReadToActive,
+
+    /// Prints the current active variable to output, as a Unicode character.
+    /// "I got it!"
+    PrintActive,
 
     /// Increments the active variable.
     /// "Wow!"
@@ -88,10 +92,17 @@ impl<R: Read, W: Write> StackMachine<R, W> {
         match action {
             SmAction::ReadToActive => {
                 // Read one byte from stdin
-                // TODO: This is bad
-                self.active_var =
-                    self.reader.next().and_then(|result| result.ok()).unwrap()
-                        as i64;
+                // TODO error handling
+                self.active_var = i64::from(
+                    self.reader.next().and_then(|result| result.ok()).unwrap(),
+                );
+            }
+            SmAction::PrintActive => {
+                // TODO error handling
+                self.writer
+                    // Write the lowest 4 bytes, to represent a Unicode char
+                    .write_all(&self.active_var.to_be_bytes()[4..])
+                    .unwrap();
             }
             SmAction::IncrActive => {
                 self.active_var += 1;
@@ -115,7 +126,7 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                 Some(val) => {
                     self.active_var = val;
                 }
-                // Runtime errors: easiest punt on the planet
+                // TODO error handling
                 None => panic!("Pop on empty stack!"),
             },
             SmAction::If(subactions) => {
@@ -140,13 +151,6 @@ impl<R: Read, W: Write> StackMachine<R, W> {
         for action in actions {
             self.run_action(action)
         }
-    }
-}
-
-impl StackMachine<Stdin, Stdout> {
-    /// Creates a new machine that reads from stdin and writes to stdout.
-    pub fn new_std() -> Self {
-        Self::new(io::stdin(), io::stdout())
     }
 }
 
