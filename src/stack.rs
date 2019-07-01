@@ -8,6 +8,7 @@ use std::io::Write;
 type Value = i64;
 
 /// One step to run on the stack machine
+#[derive(Clone, Debug)]
 pub enum SmAction {
     /// Reads one byte from input and sets the active variable to it.
     /// "Take the shot!"
@@ -35,7 +36,7 @@ pub enum SmAction {
 
     /// Pushes the value 0 onto the stack.
     /// "Noooo!"
-    Push0,
+    PushZero,
 
     /// Pushes the active value onto the top of the stack
     /// "Defending..."
@@ -77,7 +78,7 @@ impl<R: Read, W: Write> StackMachine<R, W> {
         Self {
             active_var: 0,
             inactive_var: 0,
-            stack: vec![],
+            stack: Vec::new(),
             reader: reader.bytes(),
             writer,
         }
@@ -116,7 +117,7 @@ impl<R: Read, W: Write> StackMachine<R, W> {
             SmAction::Swap => {
                 std::mem::swap(&mut self.active_var, &mut self.inactive_var);
             }
-            SmAction::Push0 => {
+            SmAction::PushZero => {
                 self.stack.push(0);
             }
             SmAction::PushActive => {
@@ -203,9 +204,9 @@ mod tests {
     }
 
     #[test]
-    fn test_push_0() {
+    fn test_push_zero() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive, SmAction::Push0]);
+        sm.run(&[SmAction::IncrActive, SmAction::PushZero]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[0]);
     }
@@ -221,7 +222,11 @@ mod tests {
     #[test]
     fn test_pop_to_active() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive, SmAction::Push0, SmAction::PopToActive]);
+        sm.run(&[
+            SmAction::IncrActive,
+            SmAction::PushZero,
+            SmAction::PopToActive,
+        ]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(&sm.stack, &[]);
     }
@@ -259,7 +264,7 @@ mod tests {
             SmAction::IncrActive,
             SmAction::IncrActive,
             SmAction::IncrActive,
-            SmAction::While(vec![SmAction::Push0, SmAction::DecrActive]),
+            SmAction::While(vec![SmAction::PushZero, SmAction::DecrActive]),
         ]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.stack, &[0, 0, 0]);

@@ -33,6 +33,7 @@ Begin Loop;
     Push Zero;
     Pop To Var;
     Swap Vars;  // State back in main variable
+
     // The next part depends on the Turing Machine we’re implementing, but we achieve a big
     // “switch” on the state with stuff like this:
     Decrement;  // decrement (man this language is hard to read)
@@ -42,8 +43,10 @@ Begin Loop;
     Decrement;
     Begin If;
         // code for state = 2 here
+    End If;
     Decrement;
     // ...etc up to maximum number of states.
+
     // Once we do find the correct block of code for state, we need to be able to
     // switch on the character at the original top of the stack, using a similar strategy.
     // We’re still holding the other stack encoded as a big number on top of it,
