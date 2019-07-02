@@ -87,7 +87,9 @@ fn compile_main_loop(states: &[State]) -> SmInstruction {
         .into_iter()
         // Generate code for each state and add it to the loop. Exactly one
         // state will be executed on each iteration, or if none match, then
-        // we'll terminate.
+        // we'll terminate. We match each state by starting a counter at
+        // n=desired state #, and decrementing it until one block matches.
+        // We want the nth block to be state n, so we need to sort the states.
         .chain(states.iter().map(compile_state).flatten())
         .collect(),
     )
@@ -98,7 +100,7 @@ fn compile_main_loop(states: &[State]) -> SmInstruction {
 ///
 /// ## Input state
 /// var_a: State counter
-/// var_i: FREE
+/// var_i: 0
 /// - Left tape (encoded)
 /// - Head char
 /// - ...Right tape
