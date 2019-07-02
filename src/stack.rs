@@ -1,15 +1,12 @@
-use std::io;
 use std::io::Bytes;
 use std::io::Read;
-use std::io::Stdin;
-use std::io::Stdout;
 use std::io::Write;
 
 type Value = i64;
 
 /// One step to run on the stack machine
 #[derive(Clone, Debug)]
-pub enum SmAction {
+pub enum SmInstruction {
     /// Reads one byte from input and sets the active variable to it.
     /// "Take the shot!"
     ReadToActive,
@@ -49,13 +46,13 @@ pub enum SmAction {
 
     /// Runs all given steps, in order, iff active_var == inactive_var.
     /// "Nice shot!" and "What a save!" - we could require the user to end with
-    /// an EndIf action  to preserve better correlation with rocketlang,
+    /// an EndIf instruction to preserve better correlation with rocketlang,
     /// but I think this shortcut is okay to take.
     If(Vec<Self>),
 
     /// Runs all given steps, in order, while active_var > 0.
     /// "Great pass!" and "Thanks!" - we could require the user to end  with
-    /// an EndWhile action to preserve better correlation with rocketlang,
+    /// an EndWhile instruction to preserve better correlation with rocketlang,
     /// but I think this shortcut is okay to take.
     While(Vec<Self>),
 }
@@ -88,69 +85,69 @@ impl<R: Read, W: Write> StackMachine<R, W> {
         self.active_var
     }
 
-    /// Runs a single action on this machine.
-    fn run_action(&mut self, action: &SmAction) {
-        match action {
-            SmAction::ReadToActive => {
+    /// Runs a single instruction on this machine.
+    fn run_instruction(&mut self, instruction: &SmInstruction) {
+        match instruction {
+            SmInstruction::ReadToActive => {
                 // Read one byte from stdin
                 // TODO error handling
                 self.active_var = i64::from(
                     self.reader.next().and_then(|result| result.ok()).unwrap(),
                 );
             }
-            SmAction::PrintActive => {
+            SmInstruction::PrintActive => {
                 // TODO error handling
                 self.writer
                     // Write the lowest 4 bytes, to represent a Unicode char
                     .write_all(&self.active_var.to_be_bytes()[4..])
                     .unwrap();
             }
-            SmAction::IncrActive => {
+            SmInstruction::IncrActive => {
                 self.active_var += 1;
             }
-            SmAction::DecrActive => {
+            SmInstruction::DecrActive => {
                 self.active_var -= 1;
             }
-            SmAction::SaveActive => {
+            SmInstruction::SaveActive => {
                 self.inactive_var = self.active_var;
             }
-            SmAction::Swap => {
+            SmInstruction::Swap => {
                 std::mem::swap(&mut self.active_var, &mut self.inactive_var);
             }
-            SmAction::PushZero => {
+            SmInstruction::PushZero => {
                 self.stack.push(0);
             }
-            SmAction::PushActive => {
+            SmInstruction::PushActive => {
                 self.stack.push(self.active_var);
             }
-            SmAction::PopToActive => match self.stack.pop() {
+            SmInstruction::PopToActive => match self.stack.pop() {
                 Some(val) => {
                     self.active_var = val;
                 }
                 // TODO error handling
                 None => panic!("Pop on empty stack!"),
             },
-            SmAction::If(subactions) => {
+            SmInstruction::If(subinstrs) => {
                 if self.active_var == self.inactive_var {
-                    for subaction in subactions {
-                        self.run_action(subaction)
+                    for subinstr in subinstrs {
+                        self.run_instruction(subinstr)
                     }
                 }
             }
-            SmAction::While(subactions) => {
+            SmInstruction::While(subinstrs) => {
                 while self.active_var > 0 {
-                    for subaction in subactions {
-                        self.run_action(subaction)
+                    for subinstr in subinstrs {
+                        self.run_instruction(subinstr)
                     }
                 }
             }
         }
     }
 
-    /// Runs all given actions on this machine.
-    pub fn run(&mut self, actions: &[SmAction]) {
-        for action in actions {
-            self.run_action(action)
+    /// Runs all given instructions on this machine.
+    pub fn run(&mut self, instructions: &[SmInstruction]) {
+        for instruction in instructions {
+            self.run_instruction(instruction)
         }
     }
 }
@@ -162,35 +159,35 @@ mod tests {
     #[test]
     fn test_get_active() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive]);
+        sm.run(&[SmInstruction::IncrActive]);
         assert_eq!(sm.get_active(), 1);
     }
 
     #[test]
     fn test_read_to_active() {
         let mut sm = StackMachine::new(&b"\x09"[..], Vec::new());
-        sm.run(&[SmAction::ReadToActive]);
+        sm.run(&[SmInstruction::ReadToActive]);
         assert_eq!(sm.active_var, 9);
     }
 
     #[test]
     fn test_incr_active() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive]);
+        sm.run(&[SmInstruction::IncrActive]);
         assert_eq!(sm.active_var, 1);
     }
 
     #[test]
     fn test_decr_active() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::DecrActive]);
+        sm.run(&[SmInstruction::DecrActive]);
         assert_eq!(sm.active_var, -1);
     }
 
     #[test]
     fn test_save_active() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive, SmAction::SaveActive]);
+        sm.run(&[SmInstruction::IncrActive, SmInstruction::SaveActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 1);
     }
@@ -198,7 +195,7 @@ mod tests {
     #[test]
     fn test_swap() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive, SmAction::Swap]);
+        sm.run(&[SmInstruction::IncrActive, SmInstruction::Swap]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
     }
@@ -206,7 +203,7 @@ mod tests {
     #[test]
     fn test_push_zero() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive, SmAction::PushZero]);
+        sm.run(&[SmInstruction::IncrActive, SmInstruction::PushZero]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[0]);
     }
@@ -214,7 +211,7 @@ mod tests {
     #[test]
     fn test_push_active() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::IncrActive, SmAction::PushActive]);
+        sm.run(&[SmInstruction::IncrActive, SmInstruction::PushActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[1]);
     }
@@ -223,9 +220,9 @@ mod tests {
     fn test_pop_to_active() {
         let mut sm = StackMachine::new_std();
         sm.run(&[
-            SmAction::IncrActive,
-            SmAction::PushZero,
-            SmAction::PopToActive,
+            SmInstruction::IncrActive,
+            SmInstruction::PushZero,
+            SmInstruction::PopToActive,
         ]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(&sm.stack, &[]);
@@ -235,14 +232,17 @@ mod tests {
     #[should_panic(expected = "Pop on empty")]
     fn test_pop_to_active_on_empty() {
         let mut sm = StackMachine::new_std();
-        sm.run(&[SmAction::PopToActive]);
+        sm.run(&[SmInstruction::PopToActive]);
     }
 
     #[test]
     fn test_if_positive() {
         let mut sm = StackMachine::new_std();
         // If DOES run
-        sm.run(&[SmAction::If(vec![SmAction::IncrActive, SmAction::Swap])]);
+        sm.run(&[SmInstruction::If(vec![
+            SmInstruction::IncrActive,
+            SmInstruction::Swap,
+        ])]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
     }
@@ -251,7 +251,10 @@ mod tests {
     fn test_if_negative() {
         let mut sm = StackMachine::new_std();
         // If DOESN'T run
-        sm.run(&[SmAction::IncrActive, SmAction::If(vec![SmAction::Swap])]);
+        sm.run(&[
+            SmInstruction::IncrActive,
+            SmInstruction::If(vec![SmInstruction::Swap]),
+        ]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 0);
     }
@@ -261,10 +264,13 @@ mod tests {
         let mut sm = StackMachine::new_std();
         // If DOESN'T run
         sm.run(&[
-            SmAction::IncrActive,
-            SmAction::IncrActive,
-            SmAction::IncrActive,
-            SmAction::While(vec![SmAction::PushZero, SmAction::DecrActive]),
+            SmInstruction::IncrActive,
+            SmInstruction::IncrActive,
+            SmInstruction::IncrActive,
+            SmInstruction::While(vec![
+                SmInstruction::PushZero,
+                SmInstruction::DecrActive,
+            ]),
         ]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.stack, &[0, 0, 0]);
