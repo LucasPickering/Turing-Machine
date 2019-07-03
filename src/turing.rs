@@ -12,7 +12,8 @@ use std::io;
 /// Obviously, all the data has to get passed around a lot to be able to make
 /// room for computations.
 
-// Will be truncated to 7 bits (ASCII) to maximize stack length when encoded to an int
+// Will be truncated to 7 bits (ASCII) to maximize stack length when it gets
+// encoded to a single int
 pub type Char = u8;
 
 /// This is not the most common way of defining a TM (usually you write AND
@@ -25,7 +26,7 @@ pub enum TapeInstruction {
 }
 
 pub struct State<'a> {
-    /// Unique numerical ID for this state
+    /// Unique numerical ID for this state (starts at 0)
     pub id: u32,
     /// All transitions that can be made from this state
     pub transitions: Vec<Transition<'a>>,
@@ -33,7 +34,7 @@ pub struct State<'a> {
 
 pub struct Transition<'a> {
     /// The character on the tape that triggers this transition
-    pub input_char: Char,
+    pub match_char: Char,
     /// The instruction to execute on the tape (L/R/W)
     pub tape_instruction: TapeInstruction,
     /// The state to transition to next
@@ -45,7 +46,6 @@ pub struct Transition<'a> {
 ///
 /// This has the external API of a TM, but internally only uses the two-variable
 /// stack machine from Rocketlang.
-
 pub struct TuringMachine {
     instructions: Vec<SmInstruction>,
 }
