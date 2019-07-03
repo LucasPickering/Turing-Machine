@@ -1,6 +1,4 @@
-use std::io::Bytes;
-use std::io::Read;
-use std::io::Write;
+use std::io::{Bytes, Read, Write};
 
 type Value = i64;
 
@@ -60,6 +58,20 @@ pub enum SmInstruction {
     /// an EndWhile instruction to preserve better correlation with rocketlang,
     /// but I think this shortcut is okay to take.
     While(Vec<Self>),
+
+    /// A standalone comment.
+    ///
+    /// Rocketlang doesn't support comments, so this is for debugging only.
+    /// These comments will need to be stripped before passing the source to
+    /// the Rocketlang interpreter.
+    Comment(&'static str),
+
+    /// A comment that goes on the same line as an instruction
+    ///
+    /// Rocketlang doesn't support comments, so this is for debugging only.
+    /// These comments will need to be stripped before passing the source to
+    /// the Rocketlang interpreter.
+    InlineComment(Box<Self>, &'static str),
 }
 
 /// A direct equivalent of the rocketlang interpreter, equally as powerful.
@@ -99,7 +111,10 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                 // Read one byte from stdin
                 // TODO error handling
                 self.active_var = i64::from(
-                    self.reader.next().and_then(|result| result.ok()).unwrap(),
+                    self.reader
+                        .next()
+                        .and_then(std::result::Result::ok)
+                        .unwrap(),
                 );
             }
             SmInstruction::PrintActive => {
@@ -157,6 +172,10 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                     }
                 }
             }
+            SmInstruction::Comment(_) => {}
+            SmInstruction::InlineComment(subinstr, _) => {
+                self.run_instruction(subinstr)
+            }
         }
     }
 
@@ -170,125 +189,143 @@ impl<R: Read, W: Write> StackMachine<R, W> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{SmInstruction::*, *};
+
+    fn make_sm() -> StackMachine<&'static [u8], Vec<u8>> {
+        StackMachine::new(b"", Vec::new())
+    }
 
     #[test]
     fn test_get_active() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::IncrActive]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive]);
         assert_eq!(sm.get_active(), 1);
     }
 
     #[test]
     fn test_read_to_active() {
-        let mut sm = StackMachine::new(&b"\x09"[..], Vec::new());
-        sm.run(&[SmInstruction::ReadToActive]);
+        let mut sm: StackMachine<&'static [u8], Vec<u8>> =
+            StackMachine::new(b"\x09", Vec::new());
+        sm.run(&[ReadToActive]);
         assert_eq!(sm.active_var, 9);
     }
 
     #[test]
     fn test_incr_active() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::IncrActive]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive]);
         assert_eq!(sm.active_var, 1);
     }
 
     #[test]
     fn test_decr_active() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::DecrActive]);
+        let mut sm = make_sm();
+        sm.run(&[DecrActive]);
         assert_eq!(sm.active_var, -1);
     }
 
     #[test]
     fn test_save_active() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::IncrActive, SmInstruction::SaveActive]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive, SaveActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 1);
     }
 
     #[test]
     fn test_swap() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::IncrActive, SmInstruction::Swap]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive, Swap]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
     }
 
     #[test]
     fn test_push_zero() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::IncrActive, SmInstruction::PushZero]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive, PushZero]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[0]);
     }
 
     #[test]
     fn test_push_active() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::IncrActive, SmInstruction::PushActive]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive, PushActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[1]);
     }
 
     #[test]
     fn test_pop_to_active() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[
-            SmInstruction::IncrActive,
-            SmInstruction::PushZero,
-            SmInstruction::PopToActive,
-        ]);
+        let mut sm = make_sm();
+        sm.run(&[IncrActive, PushZero, PopToActive]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(&sm.stack, &[]);
     }
 
     #[test]
     #[should_panic(expected = "Pop on empty")]
-    fn test_pop_to_active_on_empty() {
-        let mut sm = StackMachine::new_std();
-        sm.run(&[SmInstruction::PopToActive]);
+    fn test_pop_to_active_on_empty_error() {
+        let mut sm = make_sm();
+        sm.run(&[PopToActive]);
+    }
+
+    #[test]
+    fn test_pop_to_active_on_empty_no_error() {
+        let mut sm = make_sm();
+        sm.run(&[ToggleErrors, PopToActive]);
     }
 
     #[test]
     fn test_if_positive() {
-        let mut sm = StackMachine::new_std();
+        let mut sm = make_sm();
         // If DOES run
-        sm.run(&[SmInstruction::If(vec![
-            SmInstruction::IncrActive,
-            SmInstruction::Swap,
-        ])]);
+        sm.run(&[If(vec![IncrActive, Swap])]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
     }
 
     #[test]
     fn test_if_negative() {
-        let mut sm = StackMachine::new_std();
+        let mut sm = make_sm();
         // If DOESN'T run
-        sm.run(&[
-            SmInstruction::IncrActive,
-            SmInstruction::If(vec![SmInstruction::Swap]),
-        ]);
+        sm.run(&[IncrActive, If(vec![Swap])]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 0);
     }
 
     #[test]
     fn test_while() {
-        let mut sm = StackMachine::new_std();
+        let mut sm = make_sm();
         // If DOESN'T run
         sm.run(&[
-            SmInstruction::IncrActive,
-            SmInstruction::IncrActive,
-            SmInstruction::IncrActive,
-            SmInstruction::While(vec![
-                SmInstruction::PushZero,
-                SmInstruction::DecrActive,
-            ]),
+            IncrActive,
+            IncrActive,
+            IncrActive,
+            While(vec![PushZero, DecrActive]),
         ]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.stack, &[0, 0, 0]);
+    }
+
+    #[test]
+    fn test_comment() {
+        let mut sm = make_sm();
+        // Comment does nothing
+        sm.run(&[Comment("Comment!")]);
+        assert_eq!(sm.active_var, 0);
+        assert_eq!(sm.inactive_var, 0);
+        assert!(sm.stack.is_empty());
+    }
+
+    #[test]
+    fn test_inline_comment() {
+        let mut sm = make_sm();
+        // Comment does nothing
+        sm.run(&[InlineComment(Box::new(IncrActive), "Comment!")]);
+        assert_eq!(sm.active_var, 1);
+        assert_eq!(sm.inactive_var, 0);
+        assert!(sm.stack.is_empty());
     }
 }
