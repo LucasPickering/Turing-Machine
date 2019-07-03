@@ -1,5 +1,7 @@
 use std::io::{Bytes, Read, Write};
 
+/// The size of each register. For tape encoding, we're using 7 bits per char,
+/// so this gives us 9 chars with one extra bit for the sign.
 type Value = i64;
 
 /// One step to run on the stack machine

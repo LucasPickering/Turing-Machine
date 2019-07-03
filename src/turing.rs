@@ -1,6 +1,7 @@
-use crate::compile::compile;
-use crate::stack::SmInstruction;
-use crate::stack::StackMachine;
+use crate::{
+    compile::compile,
+    stack::{SmInstruction, StackMachine},
+};
 use std::io;
 
 /// The general strategy use here,  and almost all of the Rocketlang code, was
@@ -16,6 +17,9 @@ use std::io;
 /// Restricted to ASCII to maximize stack length when it gets encoded to a
 /// single int.
 pub const CHAR_SIZE_BITS: usize = 7;
+
+/// The number of characters that our machine can recognize.
+pub const ALPHABET_SIZE: usize = 1 << CHAR_SIZE_BITS; // 1 << n == 2^n
 
 /// Will be truncated to 7 bits to fit in the alphabet.
 pub type Char = u8;
@@ -64,5 +68,16 @@ impl TuringMachine {
     pub fn run(&self, input: String) {
         let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
         machine.run(&self.instructions);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_noop() {
+        let tm = TuringMachine::new(&[]);
+        tm.run("\x00".to_owned());
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     stack::SmInstruction::{self, *},
-    turing::{Char, State, TapeInstruction, Transition, CHAR_SIZE_BITS},
+    turing::{Char, State, TapeInstruction, Transition, ALPHABET_SIZE},
 };
 use itertools::Itertools;
 use std::{collections::HashMap, iter};
@@ -51,10 +51,10 @@ pub fn compile(states: &[State]) -> Vec<SmInstruction> {
         // MAIN LOOP
         // ---------
         compile_main_loop(states),
-        //
-        // --------
-        // POSTLUDE
-        // --------
+        /*
+         * --------
+         * POSTLUDE
+         * -------- */
     ]
 }
 
@@ -273,43 +273,100 @@ fn compile_tape_instruction(
     tape_instruction: &TapeInstruction,
 ) -> Vec<SmInstruction> {
     match tape_instruction {
-        TapeInstruction::Left => vec![], // TODO
-        TapeInstruction::Right => {
-            // We have to do some tedious math to add a char to the left tape.
+        // Strategy here: Divide left tape by alphabet SIZE by repeated
+        // subtracting SIZE until we get negative, then adding it back
+        // once. This will give us a remainder, which is the rightmost
+        // character on the left tape (i.e. our new head). Extract that,
+        // then undo the division by adding SIZE back the same number
+        // of times. Here's a math proof to make it seem more believable:
+
+        // LT: Current Left Tape value
+        // LT': Left Tape value after the shift
+        // SIZE: Alphabet size, i.e. 2^n where n is the char size in bits
+        // H: Head Char value after the shift
+        // x: Number of times we subtract SIZE from LT to make LT<=0
+        // R: Remainder after computing (LT / SIZE) (i.e. val of lowest n bits)
+
+        // EQ1:
+        // LT = (LT' * SIZE) + H         : By definition of the tape
+        // -----
+        // EQ2:
+        // LT - (SIZE * x) = R - SIZE    : By the method we use to compute R
+        // LT = R - SIZE + (SIZE * x)
+        // LT = R + (-1 + x) * SIZE
+        // LT = SIZE(x - 1) + R
+        // -----
+        // Therefore:
+        // H = R
+        // LT' = x - 1
+        TapeInstruction::Left => vec![
+            PushZero,
+            PopToActive,
+            Swap,
+            While(
+                // State before each iteration:
+                // var_a: Left tape (partially divided)
+                // var_i: Decr counter (# of times we've subtracted SIZE from LT)
+                // - ...Right tape
+                iter::repeat(DecrActive)
+                    .take(ALPHABET_SIZE)
+                    .chain(vec![Swap, IncrActive, Swap])
+                    .collect(),
+            ),
+            // This terminates when LT goes negative, so state is now:
+            // var_a: LT remainder minus SIZE (i.e. with one extra subtraction)
+            // var_i: Decr counter (# of times we subtracted SIZE from LT)
+            // - ...Right tape
+        ]
+        .into_iter()
+        // Add SIZE back to the remainder to get the new Head value
+        .chain(iter::repeat(IncrActive).take(ALPHABET_SIZE))
+        // This won't terminate until LT goes negative, so state is:
+        // var_a: LT remainder (i.e. NEW head char)
+        // var_i: Decr counter (# of times we subtracted SIZE from LT)
+        // - ...Right tape
+        .chain(vec![
+            // Push new head char, then reset that counter to 0
+            PushActive, Swap,
+            // Now var_a holds the number of times we subtracted SIZE. That
+            // will be one greater than the new value of LT, so just decr.
+            // Swap back to put LT back in var_i
+            DecrActive, Swap,
+        ])
+        .collect(),
+
+        TapeInstruction::Right => iter::repeat(vec![
+            // Similar to left shift, we have to do some tedious math to add a
+            // char to the left tape.
             // First, we need to free up the bottom n bits in the left tape,
             // where n is the number of bits in a char. Just do LT << n.
             // Oh wait... we don't have bit ops. Let's do LT * 2^n. Shit.
             // Don't have that either. Guess we have to add LT to itself
             // (2^n)-1 times. Seems tractable enough.
-            iter::repeat(vec![
-                // Load LT into var_a (and in var_i)
-                Swap,
-                PushActive,
-                Swap,
-                PopToActive,
-                // Add LT to var_i
-                While(vec![DecrActive, Swap, IncrActive, Swap]),
-            ])
-            .take((1 << CHAR_SIZE_BITS) - 1) // 1 << n == 2^n
-            .flatten()
-            .chain(vec![
-                Swap, // Put head char back in var_a
-                // Add the head char to the lowest bits of the left tape
-                While(vec![DecrActive, Swap, IncrActive, Swap]),
-            ])
-            .collect()
-        }
 
-        TapeInstruction::Write(c) => vec![
-            // Remove the head char and reset the counter to 0
+            // Load LT into var_a (and in var_i)
+            Swap,
+            PushActive,
+            Swap,
             PopToActive,
-            PushZero,
-            PopToActive,
-        ]
-        .into_iter()
-        // Incr up to the new char value, then push it
-        .chain(iter::repeat(IncrActive).take(*c as usize))
-        .chain(iter::once(PushActive))
+            // Add LT to var_i
+            While(vec![DecrActive, Swap, IncrActive, Swap]),
+        ])
+        .take(ALPHABET_SIZE - 1)
+        .flatten()
+        // Now put the head char back in var_a, then add its value to the
+        // lowest n bits of the left tape
+        .chain(vec![Swap, While(vec![DecrActive, Swap, IncrActive, Swap])])
         .collect(),
+
+        TapeInstruction::Write(c) => {
+            // Pop the head char to var_a, then overwrite it with a 0
+            vec![PopToActive, PushZero, PopToActive]
+                .into_iter()
+                // Incr up to the new char value, then push it
+                .chain(iter::repeat(IncrActive).take(*c as usize))
+                .chain(iter::once(PushActive))
+                .collect()
+        }
     }
 }
