@@ -34,6 +34,7 @@ pub fn compile(states: &[State]) -> Vec<SmInstruction> {
         // -------
         // PRELUDE
         // -------
+        ToggleErrors, // Disable errors
         // Read the input string onto the tape. For convenience, assume the
         // input is reversed and terminated with a 0, e.g. "foo" is
         // actually "oof\x00".

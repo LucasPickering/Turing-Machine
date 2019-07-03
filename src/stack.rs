@@ -40,9 +40,14 @@ pub enum SmInstruction {
     PushActive,
 
     /// Pops the value at the top of the stack and sets the active var to it.
-    /// If the stack is empty, then this `panic!`s.
+    /// If the stack is empty: If errors are enabled then this `panic!`s. If
+    /// not, this pops 0.
     /// "Centering..."
     PopToActive,
+
+    /// Toggles error handling. When enabled, errors (e.g. popping an empty
+    /// stack) generate a panic!. When disabled, no errors (e.g. just pop 0).
+    ToggleErrors,
 
     /// Runs all given steps, in order, iff active_var == inactive_var.
     /// "Nice shot!" and "What a save!" - we could require the user to end with
@@ -64,6 +69,7 @@ pub struct StackMachine<R: Read, W: Write> {
     active_var: Value,
     inactive_var: Value,
     stack: Vec<Value>,
+    errors_enabled: bool,
     reader: Bytes<R>,
     writer: W,
 }
@@ -76,6 +82,7 @@ impl<R: Read, W: Write> StackMachine<R, W> {
             active_var: 0,
             inactive_var: 0,
             stack: Vec::new(),
+            errors_enabled: true,
             reader: reader.bytes(),
             writer,
         }
@@ -125,8 +132,17 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                     self.active_var = val;
                 }
                 // TODO error handling
-                None => panic!("Pop on empty stack!"),
+                None => {
+                    if self.errors_enabled {
+                        panic!("Pop on empty stack!")
+                    } else {
+                        self.active_var = 0;
+                    }
+                }
             },
+            SmInstruction::ToggleErrors => {
+                self.errors_enabled = !self.errors_enabled;
+            }
             SmInstruction::If(subinstrs) => {
                 if self.active_var == self.inactive_var {
                     for subinstr in subinstrs {
