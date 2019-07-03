@@ -3,8 +3,7 @@ use crate::{
     turing::{Char, State, TapeInstruction, Transition, CHAR_SIZE_BITS},
 };
 use itertools::Itertools;
-use std::collections::HashMap;
-use std::iter;
+use std::{collections::HashMap, iter};
 
 /// Stack machine codegen logic. There are many places where we want to
 /// document the expected machine state, so we'll standardize a way of
@@ -279,7 +278,7 @@ fn compile_tape_instruction(
             // We have to do some tedious math to add a char to the left tape.
             // First, we need to free up the bottom n bits in the left tape,
             // where n is the number of bits in a char. Just do LT << n.
-            // Oh wait... we don't have bit ops. Then do LT * 2^n. Shit.
+            // Oh wait... we don't have bit ops. Let's do LT * 2^n. Shit.
             // Don't have that either. Guess we have to add LT to itself
             // (2^n)-1 times. Seems tractable enough.
             iter::repeat(vec![
