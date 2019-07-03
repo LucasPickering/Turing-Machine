@@ -1,6 +1,6 @@
 use crate::{
     stack::SmInstruction::{self, *},
-    turing::{Char, State, TapeInstruction, Transition},
+    turing::{Char, State, TapeInstruction, Transition, CHAR_SIZE_BITS},
 };
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -274,8 +274,32 @@ fn compile_tape_instruction(
     tape_instruction: &TapeInstruction,
 ) -> Vec<SmInstruction> {
     match tape_instruction {
-        TapeInstruction::Left => vec![],  // TODO
-        TapeInstruction::Right => vec![], // TODO
+        TapeInstruction::Left => vec![], // TODO
+        TapeInstruction::Right => {
+            // We have to do some tedious math to add a char to the left tape.
+            // First, we need to free up the bottom n bits in the left tape,
+            // where n is the number of bits in a char. Just do LT << n.
+            // Oh wait... we don't have bit ops. Then do LT * 2^n. Shit.
+            // Don't have that either. Guess we have to add LT to itself
+            // (2^n)-1 times. Seems tractable enough.
+            iter::repeat(vec![
+                // Load LT into var_a (and in var_i)
+                Swap,
+                PushActive,
+                Swap,
+                PopToActive,
+                // Add LT to var_i
+                While(vec![DecrActive, Swap, IncrActive, Swap]),
+            ])
+            .take((1 << CHAR_SIZE_BITS) - 1) // 1 << n == 2^n
+            .flatten()
+            .chain(vec![
+                Swap, // Put head char back in var_a
+                // Add the head char to the lowest bits of the left tape
+                While(vec![DecrActive, Swap, IncrActive, Swap]),
+            ])
+            .collect()
+        }
 
         TapeInstruction::Write(c) => vec![
             // Remove the head char and reset the counter to 0

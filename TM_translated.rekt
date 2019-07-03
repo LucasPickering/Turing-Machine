@@ -79,6 +79,7 @@ Begin Loop;
     // Move right:  pop from stack, “multiply” by base and add on cr2
     Pop To Var;   // Assume error-handling off, so we can just get 0/blank when we pop empty stack
     Swap Vars;
+    // LP: I think this a mistake, because this only adds our base when we want to multiply by it
     Increment; [x number of characters]
     Swap Vars;
     Begin Loop;  // add while the character is > 0

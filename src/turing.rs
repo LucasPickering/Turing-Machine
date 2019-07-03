@@ -12,8 +12,12 @@ use std::io;
 /// Obviously, all the data has to get passed around a lot to be able to make
 /// room for computations.
 
-// Will be truncated to 7 bits (ASCII) to maximize stack length when it gets
-// encoded to a single int
+/// Number of bits used to represent one character in our alphabet.
+/// Restricted to ASCII to maximize stack length when it gets encoded to a
+/// single int.
+pub const CHAR_SIZE_BITS: usize = 7;
+
+/// Will be truncated to 7 bits to fit in the alphabet.
 pub type Char = u8;
 
 /// This is not the most common way of defining a TM (usually you write AND
