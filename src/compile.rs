@@ -68,7 +68,10 @@ pub fn compile(states: &[State]) -> Vec<SmInstruction> {
 /// - ...Right tape
 ///
 /// ## Output state
-/// TODO
+/// var_a: 0
+/// var_i: Left tape (encoded)
+/// - Head char
+/// - ...Right tape
 fn compile_main_loop(states: &[State]) -> SmInstruction {
     While(
         // TM state at the start of each iteration:
@@ -84,6 +87,7 @@ fn compile_main_loop(states: &[State]) -> SmInstruction {
             PushActive,
             PushZero,
             PopToActive,
+            Swap,
         ]
         .into_iter()
         // Generate code for each state and add it to the loop. Exactly one
@@ -102,43 +106,48 @@ fn compile_main_loop(states: &[State]) -> SmInstruction {
 }
 
 /// Compiles logic for a single state, including the If with all internal logic
-/// and the following Incr to step up to the next state to check.
+/// and the following Decr to step to the next state to check.
 ///
 /// ## Input state
-/// var_a: 0
-/// var_i: Current state #
+/// var_a: State counter
+/// var_i: 0
 /// - Left tape (encoded)
 /// - Head char
 /// - ...Right tape
 ///
 /// ## Output state
-/// TODO
+/// var_a: State counter (or next state # + fudge, if this state executed)
+/// var_i: 0
+/// - Left tape (encoded)
+/// - Head char
+/// - ...Right tape
 fn compile_state(state: &State) -> Vec<SmInstruction> {
-    // The state counter starts at 0, and counts up to n (the current state #).
-    // Once it hits n, the If condition will match. The states have to be
-    // sorted by ascending ID, so that State n is the nth block.
-    //
-    // This is a bit different from KG's solution, because we count up instead
-    // of down. This way seemed more intuitive to me.
+    // The state counter starts at n (desired state #), and counts down to 0.
+    // It will hit 0 on the nth state check, and the If condition will match.
+    // This means the states have to be sorted by ascending ID, so that State n
+    // is the nth block.
 
     // Setup logic for switching on the head char
     vec![
-        If(vec![
-            PopToActive, // Pop the left tape to var_a
-            Swap,        // Move left tape to var_i, var_a is now empty
-            PopToActive, // var_a has the head char
-            // Stack is now JUST the right tape
-            Swap,       // var_a has the left tape again
-            PushActive, // Left tape is back on stack (still encoded)
-            // Reset to 0
-            PushZero,
-            PopToActive,
-        ]
-        .into_iter()
-        // Generate a big list of Ifs, one for each transition
-        .chain(compile_transitions(&state.transitions))
-        .collect()),
-        IncrActive, // Step up to the next state ID that we're checking
+        DecrActive, // Step "up" to the next state ID that we're checking
+        If(
+            // State body
+            vec![
+                PopToActive, // Pop the left tape to var_a
+                Swap,        // Move left tape to var_i, var_a is now empty
+                PopToActive, // var_a has the head char
+                // Stack is now JUST the right tape
+                Swap,       // var_a has the left tape again
+                PushActive, // Left tape is back on stack (still encoded)
+                // Reset to 0
+                PushZero,
+                PopToActive,
+            ]
+            .into_iter()
+            // Generate a big list of Ifs, one for each transition
+            .chain(compile_transitions(&state.transitions))
+            .collect(),
+        ),
     ]
 }
 
@@ -150,6 +159,9 @@ fn compile_state(state: &State) -> Vec<SmInstruction> {
 /// var_i: Head char
 /// - Left tape (encoded)
 /// - ...Right tape
+///
+/// ## Output state
+/// TODO
 fn compile_transitions(transitions: &[Transition]) -> Vec<SmInstruction> {
     // Now we're going to check for a transition on each character. Start at
     // 0 and count up until we hit the char we're looking for. Note that,
@@ -177,15 +189,14 @@ fn compile_transitions(transitions: &[Transition]) -> Vec<SmInstruction> {
         // to the next char.
         (0..=*max_char)
             .map(|c| {
+                let mut instrs = vec![];
                 // If there is a transition for this char, compile it. If not,
                 // just add an Incr and move on.
-                let transition_steps =
-                    if let Some(transition) = keyed_by_char.get(&c) {
-                        compile_transition(transition)
-                    } else {
-                        Vec::new()
-                    };
-                transition_steps.into_iter().chain(iter::once(IncrActive))
+                if let Some(transition) = keyed_by_char.get(&c) {
+                    instrs.push(compile_transition(transition));
+                }
+                instrs.push(IncrActive);
+                instrs
             })
             .flatten()
             .collect()
@@ -195,46 +206,24 @@ fn compile_transitions(transitions: &[Transition]) -> Vec<SmInstruction> {
     }
 }
 
-/// Generates code to check the next character transition, and execute that
+/// Generates an If to check the next character transition, and execute that
 /// transition if it matches.
 ///
 /// ## Input state
-/// var_a: FREE
+/// var_a: Transition char counter
 /// var_i: Head char
 /// - Left tape (encoded)
 /// - ...Right tape
 ///
 /// ## Output state
-/// Varies depending on whether or not this transition matches.
-/// TODO: This doesn't make sense; unify logic
-///
-/// ### If it matches
-/// var_a: FREE
-/// var_i: Left tape (encoded - MODIFIED)
-/// - Head char (MODIFIED)
-/// - ...Right tape (MODIFIED)
-///
-/// If this transition matches, no
-///
-/// ### If it doesn't
-/// var_a: FREE
+/// var_a: Transition char counter
 /// var_i: Head char
 /// - Left tape (encoded)
 /// - ...Right tape (encoded)
-fn compile_transition(transition: &Transition) -> Vec<SmInstruction> {
-    vec![
-        // Reset var_a to 0
-        PushZero,
-        PopToActive,
-    ]
-    .into_iter()
-    // Set var_a = transition_char
-    .chain(iter::repeat(IncrActive).take(transition.match_char as usize))
-    // var_a: Transition char (char to match head against)
-    // var_i: Head char
-    // - Left tape (encoded)
-    // - ...Right tape
-    .chain(iter::once(If(
+///
+/// If this transition matches, then all three values (LT/head/RT) may change
+fn compile_transition(transition: &Transition) -> SmInstruction {
+    If(
         // Add the write/move/next state code for this transition.
         // This will execute only if the transition char matches the head.
         // Once the If matches, we know var_a = var_i, so we can trash one.
@@ -245,10 +234,25 @@ fn compile_transition(transition: &Transition) -> Vec<SmInstruction> {
         ]
         .into_iter()
         .chain(compile_tape_instruction(&transition.tape_instruction))
-        // TODO: Go to next state
+        // Push LT back on the stack, and put Head char back in var_i
+        .chain(vec![PopToActive, Swap, PushActive, PushZero, PopToActive])
+        // var_a: 0
+        // var_i: Head char
+        // - Left tape (encoded)
+        // - Right tape
+        // Set the next state. We want to make sure we don't match against
+        // any subsequents transitions OR states with the new state ID, so
+        // subtract a large number from the counter. Also, we need to offset
+        // the Incrs that will run for each transition char, and the Decrs for
+        // each state.
+        .chain(iter::repeat(DecrActive).take(
+            (transition.next_state.id
+                - FUDGE
+                - (max_char - transition.match_char)
+                + (num_states - state_id) as usize),
+        ))
         .collect(),
-    )))
-    .collect()
+    )
 }
 
 /// Compiles a single tape instruction (L/R/W) into a series of SM
@@ -360,12 +364,12 @@ fn compile_tape_instruction(
         .collect(),
 
         TapeInstruction::Write(c) => {
-            // Pop the head char to var_a, then overwrite it with a 0
+            // Pop the head char to var_a, then reset to 0
             vec![PopToActive, PushZero, PopToActive]
                 .into_iter()
                 // Incr up to the new char value, then push it
                 .chain(iter::repeat(IncrActive).take(*c as usize))
-                .chain(iter::once(PushActive))
+                .chain(vec![PushActive])
                 .collect()
         }
     }

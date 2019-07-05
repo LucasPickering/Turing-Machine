@@ -103,6 +103,7 @@ Begin Loop;
     End Loop;
     Increment;  [x base of characters]   // now that’s our number!
     Push To Stack;   // and it’s on the stack!  Note that pushing doesn’t destroy original.
+    // LP: I believe the rest of this is incorrect
     Begin Loop;  // If the remainder isn’t 0, our last division shouldn’t count.
         Swap Vars;
         Decrement;
