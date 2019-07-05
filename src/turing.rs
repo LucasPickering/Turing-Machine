@@ -1,5 +1,5 @@
 use crate::{
-    compile::compile,
+    compile::Compile,
     stack::{SmInstruction, StackMachine},
 };
 use std::io;
@@ -65,7 +65,7 @@ pub struct TuringMachine {
 impl TuringMachine {
     pub fn new(states: &[State]) -> Self {
         Self {
-            instructions: compile(states),
+            instructions: states.compile(),
         }
     }
 
