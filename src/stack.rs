@@ -25,7 +25,7 @@ pub enum SmInstruction {
     IncrActive,
 
     /// Decrements the active variable.
-    /// "Close One!"
+    /// "Close one!"
     DecrActive,
 
     /// Copies the active variable to the inactive variable.
@@ -52,6 +52,7 @@ pub enum SmInstruction {
 
     /// Toggles error handling. When enabled, errors (e.g. popping an empty
     /// stack) generate a panic!. When disabled, no errors (e.g. just pop 0).
+    /// "No Problem."
     ToggleErrors,
 
     /// Runs all given steps, in order, iff active_var == inactive_var.

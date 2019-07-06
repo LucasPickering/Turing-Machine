@@ -1,4 +1,5 @@
 mod compile;
+mod rocketlang;
 mod stack;
 mod turing;
 
