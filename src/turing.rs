@@ -21,10 +21,6 @@ pub const CHAR_SIZE_BITS: usize = 7;
 /// The number of characters that our machine can recognize.
 pub const ALPHABET_SIZE: usize = 1 << CHAR_SIZE_BITS; // 1 << n == 2^n
 
-/// We have to cap the number of states allowed in a machine in order for the
-/// compiled code to work.
-pub const MAX_NUM_STATES: usize = 100;
-
 /// Will be truncated to 7 bits to fit in the alphabet.
 pub type Char = u8;
 
