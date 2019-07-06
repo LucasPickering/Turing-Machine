@@ -1,5 +1,5 @@
 use crate::{
-    compile::Compile,
+    compile::{Compile, ContextCompile},
     stack::{SmInstruction, StackMachine},
 };
 use std::io;
@@ -43,6 +43,9 @@ pub struct Transition<'a> {
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
 /// that Rocketlang is Turing-complete.
 ///
+/// This machine should not be exposed externally, because it assumes that the
+/// input states have been validated.
+///
 /// This has the external API of a TM, but internally only uses the two-variable
 /// stack machine from Rocketlang.
 pub struct TuringMachine {
@@ -50,9 +53,13 @@ pub struct TuringMachine {
 }
 
 impl TuringMachine {
-    pub fn new(states: &[State]) -> Self {
+    /// Constructs a new Turing machine with the given states. This assumes that
+    /// all necessary validation has been run on the states. This includes
+    /// ensuring that the IDs are sequential, the initial state is in the array,
+    /// etc.
+    pub fn new(states: &[State], initial_state: u32) -> Self {
         Self {
-            instructions: states.compile(),
+            instructions: states.compile((initial_state,)),
         }
     }
 
@@ -69,7 +76,12 @@ mod tests {
 
     #[test]
     fn test_noop() {
-        let tm = TuringMachine::new(&[]);
+        let state = State {
+            id: 0,
+            transitions: vec![],
+        };
+        let tm = TuringMachine::new(&[state], 0);
+        assert!(!tm.instructions.is_empty());
         tm.run("\x00".to_owned());
     }
 }

@@ -44,10 +44,25 @@ pub trait Compile {
     fn compile(&self) -> Vec<SmInstruction>;
 }
 
-impl<'a> Compile for [State<'a>] {
+/// Same as `Compile`, except this also takes an additional parameter that
+/// allows you to pass extra data in.
+pub trait ContextCompile {
+    type Context;
+
+    /// Generates a sequence of instructions that execute the steps necessary
+    /// to process this data type.
+    fn compile(&self, context: Self::Context) -> Vec<SmInstruction>;
+}
+
+impl<'a> ContextCompile for [State<'a>] {
+    type Context = (u32,); // Initial state ID
+
     /// Compiles the given Turing Machine (represented by a series of states)
     /// into a series of stack machine instructions.
-    fn compile(&self) -> Vec<SmInstruction> {
+    ///
+    /// # Arguments
+    /// context - Initial state
+    fn compile(&self, context: Self::Context) -> Vec<SmInstruction> {
         // TODO Figure out a way to ACCEPT/REJECT
         // TODO Figure out places where we can optimize with SaveActive
         vec![
@@ -68,21 +83,19 @@ impl<'a> Compile for [State<'a>] {
             ReadToActive,
             While(vec![PushActive, PushZero, PopToActive, ReadToActive]),
             PushZero, // Set initial left tape to 0
-            //
-            // Now the stack will hold the portion of the tape at and right of
-            // the head. var_a will hold the state number and var_i
-            // will have the tape left of the head (encoded as a number).
-            IncrActive, // Set initial state to 1
-            //
-            // TODO Allow specifying initial state
+        ]
+        .into_iter()
+        // Set the initial state
+        .chain(iter::repeat(IncrActive).take(context.0 as usize))
+        // var_a: Initial state ID
+        // var_i: 0
+        // - 0 (Initial left tape)
+        // - Head char
+        // - ...Right tape
+        .chain(vec![
             // ---------
             // MAIN LOOP
             // ---------
-            // var_a: Initial state ID
-            // var_i: 0
-            // - 0 (Initial left tape)
-            // - Head char
-            // - ...Right tape
             While(
                 // TM state at the start of each iteration:
                 // var_a: Current (i.e. desired) state #
@@ -91,10 +104,10 @@ impl<'a> Compile for [State<'a>] {
                 // - Head char
                 // - ...Right tape
 
-                // Generate code for each state and add it to the loop. Exactly
-                // one state will be executed on each iteration, or if none
-                // match, then we'll halt. See State::compile for more on how
-                // this works, and why we have to sort the states.
+                // Generate code for each state and add it to the loop.
+                // Exactly one state will be executed on each iteration, or
+                // if none match, then we'll halt. See State::compile for
+                // more on how this works, and why we have to sort the states.
                 self.iter()
                     .sorted_by_key(|state| state.id)
                     .map(State::compile)
@@ -113,7 +126,8 @@ impl<'a> Compile for [State<'a>] {
             // POSTLUDE
             // --------
             PrintState,
-        ]
+        ])
+        .collect()
     }
 }
 
