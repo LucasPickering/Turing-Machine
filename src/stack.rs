@@ -16,6 +16,10 @@ pub enum SmInstruction {
     /// "I got it!"
     PrintActive,
 
+    /// Prints both variables and the stack.
+    /// "Sorry!"
+    PrintState,
+
     /// Increments the active variable.
     /// "Wow!"
     IncrActive,
@@ -107,6 +111,12 @@ impl<R: Read, W: Write> StackMachine<R, W> {
         self.active_var
     }
 
+    fn error_if_enabled(&self, error: &str) {
+        if self.errors_enabled {
+            panic!("$#@%! ({})", error)
+        }
+    }
+
     /// Runs a single instruction on this machine.
     fn run_instruction(&mut self, instruction: &SmInstruction) {
         match instruction {
@@ -117,23 +127,39 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                     match res_b {
                         Ok(b) => self.active_var = i64::from(b),
                         Err(error) => {
-                            if self.errors_enabled {
-                                panic!("$#@%! (Read error: {})", error)
-                            }
+                            self.error_if_enabled(&format!(
+                                "Read error: {}",
+                                error
+                            ));
                         }
                     }
                 }
             }
             SmInstruction::PrintActive => {
                 // Write the lowest 4 bytes, to represent a Unicode char
-                let res =
-                    self.writer.write_all(&self.active_var.to_be_bytes()[4..]);
-                match res {
+                let to_write = &self.active_var.to_be_bytes()[4..];
+                match self.writer.write_all(to_write) {
                     Ok(()) => {}
                     Err(error) => {
-                        if self.errors_enabled {
-                            panic!("$#@%! (Write error: {})", error)
-                        }
+                        self.error_if_enabled(&format!(
+                            "Write error: {}",
+                            error
+                        ));
+                    }
+                }
+            }
+            SmInstruction::PrintState => {
+                let to_write = format!(
+                    "\nActive: {}\nInactive: {}\nStack: {:?}\n",
+                    self.active_var, self.inactive_var, self.stack
+                );
+                match self.writer.write_all(to_write.as_bytes()) {
+                    Ok(()) => {}
+                    Err(error) => {
+                        self.error_if_enabled(&format!(
+                            "Write error: {}",
+                            error
+                        ));
                     }
                 }
             }
@@ -160,11 +186,9 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                     self.active_var = val;
                 }
                 None => {
-                    if self.errors_enabled {
-                        panic!("$#@%! (Pop on empty stack!)")
-                    } else {
-                        self.active_var = 0;
-                    }
+                    self.error_if_enabled("Pop on empty stack");
+                    // If we got here, we know errors are disabled
+                    self.active_var = 0;
                 }
             },
             SmInstruction::ToggleErrors => {

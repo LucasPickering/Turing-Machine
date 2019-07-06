@@ -48,6 +48,8 @@ impl<'a> Compile for [State<'a>] {
     /// Compiles the given Turing Machine (represented by a series of states)
     /// into a series of stack machine instructions.
     fn compile(&self) -> Vec<SmInstruction> {
+        // TODO Figure out a way to ACCEPT/REJECT
+        // TODO Figure out places where we can optimize with SaveActive
         vec![
             // -------
             // PRELUDE
@@ -107,10 +109,10 @@ impl<'a> Compile for [State<'a>] {
                     .chain(vec![PopToActive])
                     .collect(),
             ),
-            /*
-             * --------
-             * POSTLUDE
-             * -------- */
+            // --------
+            // POSTLUDE
+            // --------
+            PrintState,
         ]
     }
 }
