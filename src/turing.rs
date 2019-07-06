@@ -4,15 +4,6 @@ use crate::{
 };
 use std::io;
 
-/// The general strategy use here,  and almost all of the Rocketlang code, was
-/// created by Dr. Kevin Gold. The strategy is to simulate a two-stack PDA by
-/// essentially encoding one stack as a single number and passing that around
-/// between the two variables and the stack. Generally speaking, the stack holds
-/// the right half of the tape, including the piece under the head, and one of
-/// the variables holds the left half of the tape, encoded as a single int.
-/// Obviously, all the data has to get passed around a lot to be able to make
-/// room for computations.
-
 /// Number of bits used to represent one character in our alphabet.
 /// Restricted to ASCII to maximize stack length when it gets encoded to a
 /// single int.
@@ -66,6 +57,7 @@ impl TuringMachine {
     }
 
     pub fn run(&self, input: String) {
+        // TODO Input validation
         let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
         machine.run(&self.instructions);
     }

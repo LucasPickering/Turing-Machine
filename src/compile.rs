@@ -25,6 +25,17 @@ use std::{collections::HashMap, iter};
 ///
 /// Also, the term "head char" refers to the character on the tape that's
 /// under the head of the machine.
+///
+/// The general strategy used here, and almost all of the Rocketlang code, was
+/// created by Dr. Kevin Gold. The strategy is to simulate a two-stack PDA by
+/// essentially encoding one stack as a single number and passing that around
+/// between the two variables and the stack. Generally speaking, the stack holds
+/// the right half of the tape, including the piece under the head, and one of
+/// the variables holds the left half of the tape, encoded as a single int.
+/// Obviously, all the data has to get passed around a lot to be able to make
+/// room for computations.
+///
+/// I've made some modifications to KG's code where necessary.
 
 /// Defines compilation steps for a single type.
 pub trait Compile {
@@ -43,11 +54,17 @@ impl<'a> Compile for [State<'a>] {
             // -------
             ToggleErrors, // Disable errors
             // Read the input string onto the tape. For convenience, assume the
-            // input is reversed and terminated with a 0, e.g. "foo" is
-            // actually "oof\x00". The \x00 never ends up on the stack though.
-            // TODO Fix this by abusing ReadToActive without errors
+            // input is reversed, e.g. "foo" is actually "oof". \x00 is
+            // considered the empty char in our alphabet, so if we reach one
+            // in the input string, reading will terminate, and the \x00 will
+            // not end up on the tape. The empty char is not valid input.
+            //
+            // Read as long as the read character is >0. If we've reached the
+            // end up input, reading will not modify var_a. We can use this
+            // to terminate when we've reached the end, by resetting var_a to
+            // 0 before each read.
             ReadToActive,
-            While(vec![PushActive, ReadToActive]),
+            While(vec![PushActive, PushZero, PopToActive, ReadToActive]),
             PushZero, // Set initial left tape to 0
             //
             // Now the stack will hold the portion of the tape at and right of

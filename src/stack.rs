@@ -7,7 +7,8 @@ type Value = i64;
 /// One step to run on the stack machine
 #[derive(Clone, Debug)]
 pub enum SmInstruction {
-    /// Reads one byte from input and sets the active variable to it.
+    /// Reads one byte from input and sets the active variable to it. If there
+    /// is nothing in the input to read, this does nothing.
     /// "Take the shot!"
     ReadToActive,
 
@@ -110,21 +111,31 @@ impl<R: Read, W: Write> StackMachine<R, W> {
     fn run_instruction(&mut self, instruction: &SmInstruction) {
         match instruction {
             SmInstruction::ReadToActive => {
-                // Read one byte from stdin
-                // TODO error handling
-                self.active_var = i64::from(
-                    self.reader
-                        .next()
-                        .and_then(std::result::Result::ok)
-                        .unwrap(),
-                );
+                // Read one byte from stdin. If there is nothing to read, do
+                // nothing.
+                if let Some(res_b) = self.reader.next() {
+                    match res_b {
+                        Ok(b) => self.active_var = i64::from(b),
+                        Err(error) => {
+                            if self.errors_enabled {
+                                panic!("$#@%! (Read error: {})", error)
+                            }
+                        }
+                    }
+                }
             }
             SmInstruction::PrintActive => {
-                // TODO error handling
-                self.writer
-                    // Write the lowest 4 bytes, to represent a Unicode char
-                    .write_all(&self.active_var.to_be_bytes()[4..])
-                    .unwrap();
+                // Write the lowest 4 bytes, to represent a Unicode char
+                let res =
+                    self.writer.write_all(&self.active_var.to_be_bytes()[4..]);
+                match res {
+                    Ok(()) => {}
+                    Err(error) => {
+                        if self.errors_enabled {
+                            panic!("$#@%! (Write error: {})", error)
+                        }
+                    }
+                }
             }
             SmInstruction::IncrActive => {
                 self.active_var += 1;
@@ -148,10 +159,9 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                 Some(val) => {
                     self.active_var = val;
                 }
-                // TODO error handling
                 None => {
                     if self.errors_enabled {
-                        panic!("Pop on empty stack!")
+                        panic!("$#@%! (Pop on empty stack!)")
                     } else {
                         self.active_var = 0;
                     }
