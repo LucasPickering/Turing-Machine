@@ -10,13 +10,11 @@ use std::{collections::HashMap, iter};
 /// document the expected machine state, so we'll standardize a way of
 /// specifying that:
 ///
-/// ```
 /// var_a: A
 /// var_i: I
 /// - X
 /// - Y
 /// - ...L
-/// ```
 ///
 /// - `A` is the active variable
 /// - `I` is the inactive variable

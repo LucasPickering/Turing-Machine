@@ -1,0 +1,8 @@
+[package]
+name = "tm-cli"
+version = "0.1.0"
+authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
+edition = "2018"
+
+[dependencies]
+tm = { path = "../lib" }

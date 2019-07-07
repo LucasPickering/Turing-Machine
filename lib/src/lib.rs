@@ -7,4 +7,4 @@ mod turing;
 mod utils;
 mod validate;
 
-fn main() {}
+pub use turing::TuringMachine;

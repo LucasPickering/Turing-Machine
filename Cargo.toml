@@ -1,9 +1,5 @@
-[package]
-name = "tm"
-version = "0.1.0"
-authors = ["Lucas Pickering <lucas@lucaspickering.me>"]
-edition = "2018"
-
-[dependencies]
-itertools = "0.8.0"
-failure = "0.1.5"
+[workspace]
+members = [
+    "lib/",
+    "cli/",
+]
