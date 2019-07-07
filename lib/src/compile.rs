@@ -47,7 +47,7 @@ impl Compile for Valid<Program> {
     /// Compiles the given Turing Machine (represented by a series of states)
     /// into a series of stack machine instructions.
     fn compile(&self) -> Vec<SmInstruction> {
-        let states = &self.0.states;
+        let states = &self.states;
         let initial_state = states.iter().find(|state| state.initial).expect(
             "No initial state defined! Something went wrong in validation.",
         );

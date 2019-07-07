@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::{
     ast::{Char, Program, State, StateId, Transition, ALPHABET_SIZE},
     error::{CompilerError, CompilerResult},
@@ -6,8 +7,17 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter;
 
+/// A wrapper to indicate that the contents have been validated. This can only
+/// be created via `Validate::validate_into`, to prevent tomfoolery.
 #[derive(Debug)]
-pub struct Valid<T: Debug + Sized>(pub T);
+pub struct Valid<T: Debug + Sized>(T);
+
+impl<T:Debug+Sized> Deref for Valid<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
 
 /// Defines validation behavior for a type. Some types require contextual data
 /// for validation, such as a list of valid IDs. This trait defines a type
