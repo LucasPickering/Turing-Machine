@@ -108,10 +108,6 @@ impl<R: Read, W: Write> StackMachine<R, W> {
         }
     }
 
-    pub fn get_active(&self) -> Value {
-        self.active_var
-    }
-
     fn error_if_enabled(&self, error: &str) {
         if self.errors_enabled {
             panic!("$#@%! ({})", error)
@@ -230,13 +226,6 @@ mod tests {
 
     fn make_sm() -> StackMachine<&'static [u8], Vec<u8>> {
         StackMachine::new(b"", Vec::new())
-    }
-
-    #[test]
-    fn test_get_active() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive]);
-        assert_eq!(sm.get_active(), 1);
     }
 
     #[test]

@@ -52,7 +52,6 @@ impl Compile for Valid<Program> {
             "No initial state defined! Something went wrong in validation.",
         );
 
-        // TODO Figure out a way to ACCEPT/REJECT
         // TODO Figure out places where we can optimize with SaveActive
         vec![
             // -------
@@ -111,11 +110,52 @@ impl Compile for Valid<Program> {
                     // Get the next state off the stack
                     .chain(vec![PopToActive])
                     .collect(),
+                // After execution, if we hit a HALT, then the next state ID
+                // should be 0 to indicate ACCEPT or -1 to indicate REJECT.
+                // Either one will stop the loop, and we can handle it after.
             ),
             // --------
             // POSTLUDE
             // --------
-            PrintState,
+            // var_a: 0 for ACCEPT, -1 for REJECT
+            // var_i: 0
+            // - Left tape (encoded)
+            // - Head char
+            // - ...Right tape
+            // Check for ACCEPT
+            If(iter::empty()
+                // Print ACCEPT
+                .chain(iter::repeat(IncrActive).take(65)) // A
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(67)) // C
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(67)) // C
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(69)) // E
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(80)) // P
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(84)) // T
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .collect()),
+            // We have no if/else so we have to explicitly check for REJECT too
+            IncrActive,
+            If(iter::empty()
+                // Print REJECT
+                .chain(iter::repeat(IncrActive).take(82)) // R
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(69)) // E
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(74)) // J
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(69)) // E
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(67)) // C
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .chain(iter::repeat(IncrActive).take(84)) // T
+                .chain(vec![PrintActive, PushZero, PopToActive])
+                .collect()),
+            PrintState, // Debugging
         ])
         .collect()
     }
@@ -137,15 +177,15 @@ impl Compile for State {
     /// - ...Right tape
     ///
     /// ## Output state
-    /// ### If this state executes:
+    /// ### If this state executes
     /// var_a: 0
     /// var_i: 0
-    /// - Next state #
+    /// - Next state # (or 0 for ACCEPT, -1 for REJECT)
     /// - Left tape (encoded)
     /// - Head char
     /// - ...Right tape
     ///
-    /// ### If it doesn't execute:
+    /// ### If it doesn't execute
     /// var_a: State counter
     /// var_i: 0
     /// - Left tape (encoded)
@@ -176,6 +216,63 @@ impl Compile for State {
                 .into_iter()
                 // Generate a big list of Ifs, one for each transition
                 .chain(self.transitions.compile())
+                // Two possible states here. If a transition above executed:
+                // var_a: FREE
+                // var_i: -1
+                // - Next state #
+                // - Left tape (encoded)
+                // - Head char
+                // - ...Right tape
+                //
+                // If no transitions executed (because none of them matched):
+                // var_a: ALPHABET_SIZE
+                // var_i: Head char
+                // - Left tape (encoded)
+                // - ...Right tape
+                .chain(vec![
+                    // HALT transition to handle the case where none of the other
+                    // transitions matched. We need to either ACCEPT or REJECT here,
+                    // based on the definition of this state.
+                    // To check if any transitions matched, we can use a loop to
+                    // tell if var_i is >=0. The loop checks var_a > 0, so we need
+                    // a Swap and Incr.
+                    Swap,
+                    IncrActive, // In case Head char == 0
+                    // This loop will never run more than once!
+                    While(
+                        vec![
+                            DecrActive,  // Undo the Incr now that we know we entered
+                            Swap,        // var_a is free now
+                            PopToActive, // Pop LT
+                            Swap,        // var_a = HC, var_i = LT
+                            PushActive,  // Push HC
+                            Swap,        // var_a = LT, var_i = HC
+                            PushActive,  // Push LT
+                            // Reset var_a=0 so we exit the loop, and var_i=0
+                            // because our output contract specifies that.
+                            PushZero,
+                            PopToActive,
+                            Swap,
+                            PushZero,
+                            PopToActive,
+                        ]
+                        .into_iter()
+                        // Push the HALT condition
+                        .chain(if self.accepting {
+                            vec![PushZero] // Push 0 for ACCEPT
+                        } else {
+                            // Push -1 for REJECT
+                            vec![DecrActive, PushActive, IncrActive]
+                        })
+                        .collect(),
+                    ),
+                    // var_a: 0
+                    // var_i: 0
+                    // - Next state # (or 0 for ACCEPT, -1 for REJECT)
+                    // - Left tape (encoded)
+                    // - Head char
+                    // - ...Right tape
+                ])
                 .collect(),
             ),
         ]
@@ -193,11 +290,18 @@ impl Compile for [Transition] {
     /// - ...Right tape
     ///
     /// ## Output state
-    /// var_a: 0
-    /// var_i: 0
+    /// ### If a transition executed
+    /// var_a: FREE
+    /// var_i: -1
     /// - Next state #
     /// - Left tape (encoded)
     /// - Head char
+    /// - ...Right tape
+    ///
+    /// ### If no transitions executed (because none of them matched)
+    /// var_a: ALPHABET_SIZE
+    /// var_i: Head char
+    /// - Left tape (encoded)
     /// - ...Right tape
     fn compile(&self) -> Vec<SmInstruction> {
         // Now we're going to check for a transition on each character. Start at
@@ -236,43 +340,6 @@ impl Compile for [Transition] {
                 instrs
             })
             .flatten()
-            // Two possible states here. If a transition above executed:
-            // var_a: FREE
-            // var_i: -1
-            // - Next state #
-            // - Left tape (encoded)
-            // - Head char
-            // - ...Right tape
-            //
-            // If no transitions executed (because none of them matched):
-            // var_a: ALPHABET_SIZE
-            // var_i: Head char
-            // - Left tape (encoded)
-            // - ...Right tape
-            .chain(vec![
-                // Catch-all transition to handle the case where none of the
-                // other transitions matched. We can use a loop to tell if var_i
-                // is >=0. Loops check var_a with >0, so we need a Swap and Incr.
-                Swap,
-                IncrActive, // In case Head char == 0
-                While(vec![
-                    DecrActive,  // Undo the Incr now that we know we entered
-                    Swap,        // var_a is free now
-                    PopToActive, // Pop LT
-                    Swap,        // var_a = HC, var_i = LT
-                    PushActive,  // Push HC
-                    Swap,        // var_a = LT, var_i = HC
-                    PushActive,  // Push LT
-                    PushZero,    // Set next state = 0 (will cause a HALT)
-                    // Reset var_a=0 so we exit the loop, and var_i=0 because
-                    // our output contract specifies that.
-                    PushZero,
-                    PopToActive,
-                    Swap,
-                    PushZero,
-                    PopToActive,
-                ]),
-            ])
             .collect()
     }
 }
