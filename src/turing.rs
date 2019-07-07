@@ -1,6 +1,7 @@
 use crate::{
     ast::Program,
     compile::Compile,
+    error::{CompilerError, CompilerResult},
     stack::{SmInstruction, StackMachine},
 };
 use std::io;
@@ -32,10 +33,21 @@ impl TuringMachine {
         }
     }
 
-    pub fn run(&self, input: String) {
-        // TODO Input validation
-        let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
-        machine.run(&self.instructions);
+    pub fn run(&self, input: String) -> CompilerResult<()> {
+        // Validate each input character
+        let errors: Vec<CompilerError> = input
+            .chars()
+            .filter(|c| !c.is_ascii() || *c == '\x00')
+            .map(CompilerError::InvalidCharacter)
+            .collect();
+
+        if errors.is_empty() {
+            let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
+            machine.run(&self.instructions);
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -43,16 +55,24 @@ impl TuringMachine {
 mod tests {
     use super::*;
     use crate::ast::State;
+    use std::fmt::Debug;
+
+    fn assert_error<T: Debug>(msg: &str, result: CompilerResult<T>) {
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .iter()
+            .any(|err| err.to_string().contains(msg)));
+    }
 
     #[test]
-    fn test_noop() {
+    fn test_null_in_input() {
         let tm = TuringMachine::new(vec![State {
             id: 0,
             initial: true,
             accepting: true,
             transitions: vec![],
         }]);
-        assert!(!tm.instructions.is_empty());
-        tm.run("\x00".to_owned());
+        assert_error("Invalid character: \x00", tm.run("\x00".into()));
     }
 }
