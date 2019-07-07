@@ -3,14 +3,16 @@ use crate::{
     error::{CompilerError, CompilerResult},
 };
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::iter;
 
-pub struct Valid<T: Sized>(pub T);
+#[derive(Debug)]
+pub struct Valid<T: Debug + Sized>(pub T);
 
 /// Defines validation behavior for a type. Some types require contextual data
 /// for validation, such as a list of valid IDs. This trait defines a type
 /// `Context` for that purpose.
-pub trait Validate: Sized {
+pub trait Validate: Debug + Sized {
     type Context;
 
     /// Validates this object, using the given context. Any errors that are
@@ -119,8 +121,144 @@ impl Validate for Transition {
 
         // Validate the next state ID
         if !context.0.contains(&self.next_state) {
-            errors.push(CompilerError::StateDoesNotExist(self.next_state));
+            errors.push(CompilerError::UndefinedState(self.next_state));
         }
         errors
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::TapeInstruction;
+    use crate::utils::assert_compile_error;
+
+    #[test]
+    fn test_invalid_state_id_error() {
+        let result = Program {
+            states: vec![State {
+                id: 0, // Invalid
+                initial: true,
+                accepting: true,
+                transitions: vec![],
+            }],
+        }
+        .validate_into(&());
+        assert_compile_error("Invalid state ID: 0", result);
+    }
+
+    #[test]
+    fn test_duplicate_state_id_error() {
+        let result = Program {
+            states: vec![
+                State {
+                    id: 1,
+                    initial: true,
+                    accepting: true,
+                    transitions: vec![],
+                },
+                State {
+                    id: 1,
+                    initial: false,
+                    accepting: false,
+                    transitions: vec![],
+                },
+            ],
+        }
+        .validate_into(&());
+        assert_compile_error("State ID defined multiple times: 1", result);
+    }
+
+    #[test]
+    fn test_no_initial_state_error() {
+        let result = Program {
+            states: vec![State {
+                id: 1,
+                initial: false,
+                accepting: true,
+                transitions: vec![],
+            }],
+        }
+        .validate_into(&());
+        assert_compile_error("No state marked as initial", result);
+    }
+
+    #[test]
+    fn test_multiple_initial_states_error() {
+        let result = Program {
+            states: vec![
+                State {
+                    id: 1,
+                    initial: true,
+                    accepting: true,
+                    transitions: vec![],
+                },
+                State {
+                    id: 2,
+                    initial: true,
+                    accepting: true,
+                    transitions: vec![],
+                },
+            ],
+        }
+        .validate_into(&());
+        assert_compile_error(
+            "Multiple states marked as initial: [1, 2]",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_undefined_state_error() {
+        let result = Program {
+            states: vec![State {
+                id: 1,
+                initial: false,
+                accepting: true,
+                transitions: vec![Transition {
+                    match_char: 32,
+                    tape_instruction: TapeInstruction::Left,
+                    next_state: 2, // Invalid
+                }],
+            }],
+        }
+        .validate_into(&());
+        assert_compile_error("Undefined state: 2", result);
+    }
+
+    #[test]
+    fn test_char_zero_error() {
+        let result = Program {
+            states: vec![State {
+                id: 1,
+                initial: false,
+                accepting: true,
+                transitions: vec![Transition {
+                    match_char: 0, // Invalid
+                    tape_instruction: TapeInstruction::Left,
+                    next_state: 1,
+                }],
+            }],
+        }
+        .validate_into(&());
+        assert_compile_error("Invalid character: \x00", result);
+    }
+
+    #[test]
+    fn test_char_too_large_error() {
+        let result = Program {
+            states: vec![State {
+                id: 1,
+                initial: false,
+                accepting: true,
+                transitions: vec![Transition {
+                    match_char: 0x80, // 128 - Invalid
+                    tape_instruction: TapeInstruction::Left,
+                    next_state: 1,
+                }],
+            }],
+        }
+        .validate_into(&());
+        assert_compile_error("Invalid character: \u{80}", result);
     }
 }

@@ -11,8 +11,8 @@ pub enum CompilerError {
     NoInitialState,
     #[fail(display = "Multiple states marked as initial: {:?}", 0)]
     MultipleInitialStates(Vec<StateId>),
-    #[fail(display = "State does not exist: {}", 0)]
-    StateDoesNotExist(StateId),
+    #[fail(display = "Undefined state: {}", 0)]
+    UndefinedState(StateId),
     #[fail(display = "Invalid character: {}", 0)]
     InvalidCharacter(char),
 }

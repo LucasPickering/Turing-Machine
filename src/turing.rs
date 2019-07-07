@@ -1,9 +1,9 @@
 use crate::{
     ast::Program,
     compile::Compile,
-    validate::Validate,
     error::{CompilerError, CompilerResult},
     stack::{SmInstruction, StackMachine},
+    validate::Validate,
 };
 use std::io;
 
@@ -18,6 +18,7 @@ use std::io;
 ///
 /// This has the external API of a TM, but internally only uses the two-variable
 /// stack machine from Rocketlang.
+#[derive(Debug)]
 pub struct TuringMachine {
     instructions: Vec<SmInstruction>,
 }
@@ -55,26 +56,34 @@ impl TuringMachine {
 mod tests {
     use super::*;
     use crate::ast::State;
-    use std::fmt::Debug;
+    use crate::utils::assert_compile_error;
 
-    fn assert_error<T: Debug>(msg: &str, result: CompilerResult<T>) {
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .iter()
-            .any(|err| err.to_string().contains(msg)));
+    #[test]
+    fn test_validation_runs() {
+        // Just make sure Program validation gets called
+        let tm_result = TuringMachine::new(Program {
+            states: vec![State {
+                id: 0,
+                initial: true,
+                accepting: true,
+                transitions: vec![],
+            }],
+        });
+        assert_compile_error("Invalid state ID: 0", tm_result);
     }
 
     #[test]
-    fn test_null_in_input() {
-        let tm_result = TuringMachine::new(Program{states:vec![State {
-            id: 0,
-            initial: true,
-            accepting: true,
-            transitions: vec![],
-        }]});
+    fn test_null_in_input_error() {
+        let tm_result = TuringMachine::new(Program {
+            states: vec![State {
+                id: 1,
+                initial: true,
+                accepting: true,
+                transitions: vec![],
+            }],
+        });
         assert!(tm_result.is_ok());
-        assert_error(
+        assert_compile_error(
             "Invalid character: \x00",
             tm_result.unwrap().run("\x00".into()),
         );

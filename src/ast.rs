@@ -11,16 +11,22 @@ pub type Char = u8;
 
 pub type StateId = usize;
 
+/// The different types of instructions that the TM can execute during a
+/// transition.
+///
 /// This is not the most common way of defining a TM (usually you write AND
 /// move in each transition), but this is how KG taught us, and who am I to
 /// question him.
-
+#[derive(Debug)]
 pub enum TapeInstruction {
     Left,
     Right,
     Write(Char),
 }
 
+/// One transition, defined by a (state, char) pair. This consists of a tape
+/// instruction, and a destination state.
+#[derive(Debug)]
 pub struct Transition {
     /// The character on the tape that triggers this transition
     pub match_char: Char,
@@ -30,6 +36,8 @@ pub struct Transition {
     pub next_state: StateId,
 }
 
+/// One state in the machine.
+#[derive(Debug)]
 pub struct State {
     /// Unique numerical ID for this state (starts at 0)
     pub id: StateId,
@@ -43,6 +51,7 @@ pub struct State {
 }
 
 /// An entire Turing machine program. The root of the AST.
+#[derive(Debug)]
 pub struct Program {
     pub states: Vec<State>,
 }
