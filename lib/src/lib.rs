@@ -7,4 +7,5 @@ mod turing;
 mod utils;
 mod validate;
 
+pub use error::{CompilerError, CompilerResult};
 pub use turing::TuringMachine;

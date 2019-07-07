@@ -6,6 +6,7 @@ use crate::{
     validate::Validate,
 };
 use std::io;
+use std::path::PathBuf;
 
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
 /// that Rocketlang is Turing-complete.
@@ -32,6 +33,11 @@ impl TuringMachine {
         Ok(Self {
             instructions: program.validate_into(&())?.compile(),
         })
+    }
+
+    pub fn from_file(path: &PathBuf) -> CompilerResult<Self> {
+        let program = Program { states: vec![] }; // TODO
+        Self::new(program)
     }
 
     pub fn run(&self, input: String) -> CompilerResult<()> {
