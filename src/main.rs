@@ -4,10 +4,6 @@ mod error;
 mod rocketlang;
 mod stack;
 mod turing;
+mod validate;
 
-use turing::TuringMachine;
-
-fn main() {
-    let tm = TuringMachine::new(vec![]);
-    tm.run("".to_string());
-}
+fn main() {}

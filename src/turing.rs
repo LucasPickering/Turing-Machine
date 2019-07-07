@@ -1,6 +1,7 @@
 use crate::{
     ast::Program,
     compile::Compile,
+    validate::Validate,
     error::{CompilerError, CompilerResult},
     stack::{SmInstruction, StackMachine},
 };
@@ -26,11 +27,10 @@ impl TuringMachine {
     /// all necessary validation has been run on the states. This includes
     /// ensuring that the IDs are sequential, the initial state is in the array,
     /// etc.
-    pub fn new(program: Program) -> Self {
-        // TODO validation
-        Self {
-            instructions: program.compile(),
-        }
+    pub fn new(program: Program) -> CompilerResult<Self> {
+        Ok(Self {
+            instructions: program.validate_into(&())?.compile(),
+        })
     }
 
     pub fn run(&self, input: String) -> CompilerResult<()> {
@@ -67,12 +67,16 @@ mod tests {
 
     #[test]
     fn test_null_in_input() {
-        let tm = TuringMachine::new(vec![State {
+        let tm_result = TuringMachine::new(Program{states:vec![State {
             id: 0,
             initial: true,
             accepting: true,
             transitions: vec![],
-        }]);
-        assert_error("Invalid character: \x00", tm.run("\x00".into()));
+        }]});
+        assert!(tm_result.is_ok());
+        assert_error(
+            "Invalid character: \x00",
+            tm_result.unwrap().run("\x00".into()),
+        );
     }
 }

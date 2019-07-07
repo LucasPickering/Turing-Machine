@@ -42,4 +42,7 @@ pub struct State {
     pub transitions: Vec<Transition>,
 }
 
-pub type Program = Vec<State>;
+/// An entire Turing machine program. The root of the AST.
+pub struct Program {
+    pub states: Vec<State>,
+}

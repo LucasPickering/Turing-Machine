@@ -1,6 +1,7 @@
 use crate::{
     ast::{Char, Program, State, TapeInstruction, Transition, ALPHABET_SIZE},
     stack::SmInstruction::{self, *},
+    validate::Valid,
 };
 use itertools::Itertools;
 use std::{collections::HashMap, iter};
@@ -44,11 +45,12 @@ pub trait Compile {
     fn compile(&self) -> Vec<SmInstruction>;
 }
 
-impl Compile for Program {
+impl Compile for Valid<Program> {
     /// Compiles the given Turing Machine (represented by a series of states)
     /// into a series of stack machine instructions.
     fn compile(&self) -> Vec<SmInstruction> {
-        let initial_state = self.iter().find(|state| state.initial).expect(
+        let states = &self.0.states;
+        let initial_state = states.iter().find(|state| state.initial).expect(
             "No initial state defined! Something went wrong in validation.",
         );
 
@@ -97,7 +99,8 @@ impl Compile for Program {
                 // Exactly one state will be executed on each iteration, or
                 // if none match, then we'll halt. See State::compile for
                 // more on how this works, and why we have to sort the states.
-                self.iter()
+                states
+                    .iter()
                     .sorted_by_key(|state| state.id)
                     .map(State::compile)
                     .flatten()
