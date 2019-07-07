@@ -1,15 +1,12 @@
+mod ast;
 mod compile;
 mod rocketlang;
 mod stack;
 mod turing;
 
-use turing::{State, TuringMachine};
+use turing::TuringMachine;
 
 fn main() {
-    let state = State {
-        id: 0,
-        transitions: vec![],
-    };
-    let tm = TuringMachine::new(&[state], 0);
+    let tm = TuringMachine::new(vec![]);
     tm.run("".to_string());
 }

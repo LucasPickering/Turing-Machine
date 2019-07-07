@@ -1,6 +1,6 @@
 use crate::{
+    ast::{Char, Program, State, TapeInstruction, Transition, ALPHABET_SIZE},
     stack::SmInstruction::{self, *},
-    turing::{Char, State, TapeInstruction, Transition, ALPHABET_SIZE},
 };
 use itertools::Itertools;
 use std::{collections::HashMap, iter};
@@ -44,25 +44,14 @@ pub trait Compile {
     fn compile(&self) -> Vec<SmInstruction>;
 }
 
-/// Same as `Compile`, except this also takes an additional parameter that
-/// allows you to pass extra data in.
-pub trait ContextCompile {
-    type Context;
-
-    /// Generates a sequence of instructions that execute the steps necessary
-    /// to process this data type.
-    fn compile(&self, context: Self::Context) -> Vec<SmInstruction>;
-}
-
-impl<'a> ContextCompile for [State<'a>] {
-    type Context = (u32,); // Initial state ID
-
+impl Compile for Program {
     /// Compiles the given Turing Machine (represented by a series of states)
     /// into a series of stack machine instructions.
-    ///
-    /// # Arguments
-    /// context - Initial state
-    fn compile(&self, context: Self::Context) -> Vec<SmInstruction> {
+    fn compile(&self) -> Vec<SmInstruction> {
+        let initial_state = self.iter().find(|state| state.initial).expect(
+            "No initial state defined! Something went wrong in validation.",
+        );
+
         // TODO Figure out a way to ACCEPT/REJECT
         // TODO Figure out places where we can optimize with SaveActive
         vec![
@@ -86,7 +75,7 @@ impl<'a> ContextCompile for [State<'a>] {
         ]
         .into_iter()
         // Set the initial state
-        .chain(iter::repeat(IncrActive).take(context.0 as usize))
+        .chain(iter::repeat(IncrActive).take(initial_state.id))
         // var_a: Initial state ID
         // var_i: 0
         // - 0 (Initial left tape)
@@ -131,7 +120,7 @@ impl<'a> ContextCompile for [State<'a>] {
     }
 }
 
-impl<'a> Compile for State<'a> {
+impl Compile for State {
     /// Compiles logic for a single state, including the If with all internal logic
     /// and the following Decr to step to the next state to check.
     ///
@@ -192,7 +181,7 @@ impl<'a> Compile for State<'a> {
     }
 }
 
-impl<'a> Compile for [Transition<'a>] {
+impl Compile for [Transition] {
     /// Compiles the given transitions into a set of If statements with some
     /// logic to count through them and match the correct one.
     ///
@@ -287,7 +276,7 @@ impl<'a> Compile for [Transition<'a>] {
     }
 }
 
-impl<'a> Compile for Transition<'a> {
+impl Compile for Transition {
     /// Generates code to execute a transition, which includes one of a L/R/W,
     /// plus setting the next state.
     ///
@@ -338,7 +327,7 @@ impl<'a> Compile for Transition<'a> {
         // - Head char
         // - ...Right tape
         // Set the next state and push it onto the stack.
-        .chain(iter::repeat(IncrActive).take(self.next_state.id as usize))
+        .chain(iter::repeat(IncrActive).take(self.next_state))
         .chain(vec![PushActive, PushZero, PopToActive])
         .collect()
     }

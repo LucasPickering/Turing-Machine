@@ -1,0 +1,45 @@
+/// Number of bits used to represent one character in our alphabet.
+/// Restricted to ASCII to maximize stack length when it gets encoded to a
+/// single int.
+pub const CHAR_SIZE_BITS: usize = 7;
+
+/// The number of characters that our machine can recognize.
+pub const ALPHABET_SIZE: usize = 1 << CHAR_SIZE_BITS; // 1 << n == 2^n
+
+/// Will be truncated to 7 bits to fit in the alphabet.
+pub type Char = u8;
+
+pub type StateId = usize;
+
+/// This is not the most common way of defining a TM (usually you write AND
+/// move in each transition), but this is how KG taught us, and who am I to
+/// question him.
+
+pub enum TapeInstruction {
+    Left,
+    Right,
+    Write(Char),
+}
+
+pub struct Transition {
+    /// The character on the tape that triggers this transition
+    pub match_char: Char,
+    /// The instruction to execute on the tape (L/R/W)
+    pub tape_instruction: TapeInstruction,
+    /// The state to transition to next
+    pub next_state: StateId,
+}
+
+pub struct State {
+    /// Unique numerical ID for this state (starts at 0)
+    pub id: StateId,
+    /// Is this the initial state? Should be true for exactly one state in
+    /// a machine.
+    pub initial: bool,
+    /// Is this an accepting state?
+    pub accepting: bool,
+    /// All transitions that can be made from this state
+    pub transitions: Vec<Transition>,
+}
+
+pub type Program = Vec<State>;
