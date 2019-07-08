@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 tm = { path = "../lib" }
 structopt = "0.2.18"
+failure = "0.1.5"

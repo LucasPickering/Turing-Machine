@@ -1,5 +1,8 @@
 use crate::ast::StateId;
-use failure::Fail;
+use failure::{ Fail};
+use itertools::Itertools;
+use std::fmt::{self, Display, Formatter};
+use std::ops::Deref;
 
 #[derive(Debug, Fail)]
 pub enum CompilerError {
@@ -17,4 +20,26 @@ pub enum CompilerError {
     InvalidCharacter(char),
 }
 
-pub type CompilerResult<T> = Result<T, Vec<CompilerError>>;
+// Container for holding multiple compiler errors. This is the most common way
+// to report errors.
+#[derive(Debug, Fail)]
+pub struct CompilerErrors(Vec<CompilerError>);
+
+impl CompilerErrors {
+    pub fn new(errors: Vec<CompilerError>) -> Self {
+        CompilerErrors(errors)
+    }
+}
+
+impl Display for CompilerErrors {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.iter().join("\n"))
+    }
+}
+
+impl Deref for CompilerErrors {
+    type Target = Vec<CompilerError>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}

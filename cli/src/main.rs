@@ -1,18 +1,18 @@
+use failure::Error;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use tm::CompilerError;
 use tm::TuringMachine;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "tmcli",
-    about = "Turing machines based on a simple stack machine."
+    about = "Turing machines based on a simple two-variable stack machine."
 )]
 enum Opt {
     #[structopt(name = "run")]
     Execute {
         /// The file defining the Turing machine to run
-        #[structopt(parse(from_os_str))]
+        #[structopt(parse(from_os_str), long = "input", short = "i")]
         input_file: PathBuf,
 
         /// The input to pass to the machine for execution
@@ -22,43 +22,40 @@ enum Opt {
     #[structopt(name = "compile")]
     Compile {
         /// The file defining the Turing machine to run
-        #[structopt(parse(from_os_str), long = "input", short)]
+        #[structopt(parse(from_os_str), long = "input", short = "i")]
         input_file: PathBuf,
 
         /// The file to output Rocketlang code to
-        #[structopt(parse(from_os_str), long = "output", short)]
+        #[structopt(parse(from_os_str), long = "output", short = "o")]
         output_file: PathBuf,
     },
 }
 
-fn print_errors(msg: &str, errors: &[CompilerError]) {
-    eprintln!("{}", msg);
-    for error in errors {
-        eprintln!("{}", error);
+fn run(opt: Opt) -> Result<(), Error> {
+    match opt {
+        Opt::Execute {
+            input_file,
+            tape_input,
+        } => {
+            let tm = TuringMachine::from_file(&input_file)?;
+            tm.run(tape_input)?;
+            Ok(())
+        }
+        Opt::Compile {
+            input_file,
+            output_file,
+        } => {
+            let tm = TuringMachine::from_file(&input_file)?;
+            // TODO
+            Ok(())
+        }
     }
 }
 
 fn main() {
     let opt = Opt::from_args();
-    match opt {
-        Opt::Execute {
-            input_file,
-            tape_input,
-        } => match TuringMachine::from_file(&input_file) {
-            Ok(tm) => match tm.run(tape_input) {
-                Ok(()) => {}
-                Err(errors) => print_errors("Error(s) in tape input:", &errors),
-            },
-            Err(errors) => print_errors("Error(s) compiling machine:", &errors),
-        },
-        Opt::Compile {
-            input_file,
-            output_file,
-        } => match TuringMachine::from_file(&input_file) {
-            Ok(tm) => {
-                //TODO
-            }
-            Err(errors) => print_errors("Error(s) in tape input:", &errors),
-        },
+    match run(opt) {
+        Ok(()) => {}
+        Err(error) => eprintln!("{}", error),
     }
 }

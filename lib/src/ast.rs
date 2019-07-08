@@ -1,3 +1,5 @@
+use serde::{Serialize,Deserialize};
+
 /// Number of bits used to represent one character in our alphabet.
 /// Restricted to ASCII to maximize stack length when it gets encoded to a
 /// single int.
@@ -17,7 +19,7 @@ pub type StateId = usize;
 /// This is not the most common way of defining a TM (usually you write AND
 /// move in each transition), but this is how KG taught us, and who am I to
 /// question him.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TapeInstruction {
     Left,
     Right,
@@ -26,7 +28,7 @@ pub enum TapeInstruction {
 
 /// One transition, defined by a (state, char) pair. This consists of a tape
 /// instruction, and a destination state.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transition {
     /// The character on the tape that triggers this transition
     pub match_char: Char,
@@ -37,7 +39,7 @@ pub struct Transition {
 }
 
 /// One state in the machine.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct State {
     /// Unique numerical ID for this state (starts at 0)
     pub id: StateId,
@@ -51,7 +53,7 @@ pub struct State {
 }
 
 /// An entire Turing machine program. The root of the AST.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Program {
     pub states: Vec<State>,
 }

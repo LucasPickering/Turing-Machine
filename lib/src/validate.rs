@@ -1,20 +1,21 @@
-use std::ops::Deref;
 use crate::{
     ast::{Char, Program, State, StateId, Transition, ALPHABET_SIZE},
-    error::{CompilerError, CompilerResult},
+    error::{CompilerError, CompilerErrors},
 };
+use failure::{Error};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter;
+use std::ops::Deref;
 
 /// A wrapper to indicate that the contents have been validated. This can only
 /// be created via `Validate::validate_into`, to prevent tomfoolery.
 #[derive(Debug)]
 pub struct Valid<T: Debug + Sized>(T);
 
-impl<T:Debug+Sized> Deref for Valid<T> {
+impl<T: Debug + Sized> Deref for Valid<T> {
     type Target = T;
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -34,12 +35,12 @@ pub trait Validate: Debug + Sized {
     fn validate_into(
         self,
         context: &Self::Context,
-    ) -> CompilerResult<Valid<Self>> {
+    ) -> Result<Valid<Self>,Error> {
         let errors = self.validate(context);
         if errors.is_empty() {
             Ok(Valid(self))
         } else {
-            Err(errors)
+            Err(CompilerErrors::new(errors).into())
         }
     }
 }

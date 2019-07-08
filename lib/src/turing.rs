@@ -1,10 +1,12 @@
 use crate::{
     ast::Program,
     compile::Compile,
-    error::{CompilerError, CompilerResult},
+    error::{CompilerError, CompilerErrors},
     stack::{SmInstruction, StackMachine},
     validate::Validate,
 };
+use failure::Error;
+use std::fs;
 use std::io;
 use std::path::PathBuf;
 
@@ -29,18 +31,19 @@ impl TuringMachine {
     /// all necessary validation has been run on the states. This includes
     /// ensuring that the IDs are sequential, the initial state is in the array,
     /// etc.
-    pub fn new(program: Program) -> CompilerResult<Self> {
+    pub fn new(program: Program) -> Result<Self, Error> {
         Ok(Self {
             instructions: program.validate_into(&())?.compile(),
         })
     }
 
-    pub fn from_file(path: &PathBuf) -> CompilerResult<Self> {
-        let program = Program { states: vec![] }; // TODO
+    pub fn from_file(path: &PathBuf) -> Result<Self, Error> {
+        let contents = fs::read_to_string(path)?;
+        let program = serde_json::from_str(&contents)?;
         Self::new(program)
     }
 
-    pub fn run(&self, input: String) -> CompilerResult<()> {
+    pub fn run(&self, input: String) -> Result<(), Error> {
         // Validate each input character
         let errors: Vec<CompilerError> = input
             .chars()
@@ -53,7 +56,7 @@ impl TuringMachine {
             machine.run(&self.instructions);
             Ok(())
         } else {
-            Err(errors)
+            Err(CompilerErrors::new(errors).into())
         }
     }
 }

@@ -287,7 +287,7 @@ mod tests {
         let mut sm = make_sm();
         sm.run(&[IncrActive, PushZero, PopToActive]);
         assert_eq!(sm.active_var, 0);
-        assert_eq!(&sm.stack, &[]);
+        assert!(&sm.stack.is_empty());
     }
 
     #[test]
