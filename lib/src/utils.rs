@@ -4,7 +4,7 @@ mod tests {
     use std::fmt::Debug;
 
     /// Utility function for testing
-    pub fn assert_compile_error<T: Debug>(msg: &str, result: Result<T, Error>) {
+    pub fn assert_error<T: Debug>(msg: &str, result: Result<T, Error>) {
         assert!(result.is_err());
         match result {
             Ok(_) => panic!("Expected Err but received Ok!"),

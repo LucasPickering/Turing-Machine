@@ -1,7 +1,7 @@
 use crate::{
     ast::Program,
     compile::Compile,
-    error::{CompilerError, CompilerErrors},
+    error::RuntimeError,
     stack::{SmInstruction, StackMachine},
     validate::Validate,
 };
@@ -45,18 +45,17 @@ impl TuringMachine {
 
     pub fn run(&self, input: String) -> Result<(), Error> {
         // Validate each input character
-        let errors: Vec<CompilerError> = input
+        let illegal_chars: Vec<char> = input
             .chars()
             .filter(|c| !c.is_ascii() || *c == '\x00')
-            .map(CompilerError::InvalidCharacter)
             .collect();
 
-        if errors.is_empty() {
+        if illegal_chars.is_empty() {
             let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
             machine.run(&self.instructions);
             Ok(())
         } else {
-            Err(CompilerErrors::new(errors).into())
+            Err(RuntimeError::IllegalInputCharacters(illegal_chars).into())
         }
     }
 }
@@ -64,8 +63,14 @@ impl TuringMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::State;
-    use crate::utils::assert_compile_error;
+    use crate::ast::{State, TapeInstruction, Transition};
+    use crate::utils::assert_error;
+
+    /// Converts the given character to a byte by taking the lowest 8 bits. If any
+    /// upper bits are non-zero, they are lost and the character is mutated.
+    fn char_to_u8(c: char) -> u8 {
+        c as u8
+    }
 
     #[test]
     fn test_validation_runs() {
@@ -78,23 +83,81 @@ mod tests {
                 transitions: vec![],
             }],
         });
-        assert_compile_error("Invalid state ID: 0", tm_result);
+        assert_error("Invalid state ID: 0", tm_result);
     }
 
     #[test]
     fn test_null_in_input_error() {
-        let tm_result = TuringMachine::new(Program {
+        let tm = TuringMachine::new(Program {
             states: vec![State {
                 id: 1,
                 initial: true,
                 accepting: true,
                 transitions: vec![],
             }],
-        });
-        assert!(tm_result.is_ok());
-        assert_compile_error(
-            "Invalid character: \x00",
-            tm_result.unwrap().run("\x00".into()),
-        );
+        })
+        .unwrap();
+        assert_error("Illegal character: \x00", tm.run("\x00".into()));
+    }
+
+    #[test]
+    fn test_non_ascii_in_input_error() {
+        let tm = TuringMachine::new(Program {
+            states: vec![State {
+                id: 1,
+                initial: true,
+                accepting: true,
+                transitions: vec![],
+            }],
+        })
+        .unwrap();
+        assert_error("Illegal character: \u{80}", tm.run("\u{80}".into()));
+    }
+
+    #[test]
+    fn test_simple_machine() {
+        // Machine matches the string "foo"
+        let tm = TuringMachine::new(Program {
+            states: vec![
+                State {
+                    id: 1,
+                    initial: true,
+                    accepting: false,
+                    transitions: vec![Transition {
+                        match_char: char_to_u8('f'),
+                        tape_instruction: TapeInstruction::Right,
+                        next_state: 2,
+                    }],
+                },
+                State {
+                    id: 2,
+                    initial: false,
+                    accepting: false,
+                    transitions: vec![Transition {
+                        match_char: char_to_u8('o'),
+                        tape_instruction: TapeInstruction::Right,
+                        next_state: 3,
+                    }],
+                },
+                State {
+                    id: 3,
+                    initial: false,
+                    accepting: false,
+                    transitions: vec![Transition {
+                        match_char: char_to_u8('o'),
+                        tape_instruction: TapeInstruction::Right,
+                        next_state: 4,
+                    }],
+                },
+                State {
+                    id: 4,
+                    initial: false,
+                    accepting: true,
+                    transitions: vec![],
+                },
+            ],
+        })
+        .unwrap();
+        assert!(tm.run("foo".into()).is_ok());
     }
 }

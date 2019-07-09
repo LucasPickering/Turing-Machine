@@ -1,4 +1,4 @@
-use crate::ast::StateId;
+use crate::ast::{StateId, Char};
 use failure::{ Fail};
 use itertools::Itertools;
 use std::fmt::{self, Display, Formatter};
@@ -16,14 +16,21 @@ pub enum CompilerError {
     MultipleInitialStates(Vec<StateId>),
     #[fail(display = "Undefined state: {}", 0)]
     UndefinedState(StateId),
-    #[fail(display = "Invalid character: {}", 0)]
-    InvalidCharacter(char),
+    #[fail(display = "Illegal character: {}", 0)]
+    IllegalCharacter(Char),
 }
 
-// Container for holding multiple compiler errors. This is the most common way
-// to report errors.
+/// Container for holding multiple compiler errors. This is the most common way
+/// to report errors.
 #[derive(Debug, Fail)]
 pub struct CompilerErrors(Vec<CompilerError>);
+
+/// An error that occurs in a machine at runtime
+#[derive(Debug, Fail)]
+pub enum RuntimeError {
+    #[fail(display = "Illegal characters in input: {:?}", 0)]
+    IllegalInputCharacters(Vec<char>),
+}
 
 impl CompilerErrors {
     pub fn new(errors: Vec<CompilerError>) -> Self {

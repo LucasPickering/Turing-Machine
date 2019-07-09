@@ -2,7 +2,7 @@ use crate::{
     ast::{Char, Program, State, StateId, Transition, ALPHABET_SIZE},
     error::{CompilerError, CompilerErrors},
 };
-use failure::{Error};
+use failure::Error;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter;
@@ -35,7 +35,7 @@ pub trait Validate: Debug + Sized {
     fn validate_into(
         self,
         context: &Self::Context,
-    ) -> Result<Valid<Self>,Error> {
+    ) -> Result<Valid<Self>, Error> {
         let errors = self.validate(context);
         if errors.is_empty() {
             Ok(Valid(self))
@@ -126,8 +126,7 @@ impl Validate for Transition {
         // Validate the match char
         let match_char = self.match_char;
         if match_char == 0 || match_char >= (ALPHABET_SIZE as Char) {
-            errors
-                .push(CompilerError::InvalidCharacter(char::from(match_char)));
+            errors.push(CompilerError::IllegalCharacter(match_char));
         }
 
         // Validate the next state ID
@@ -142,7 +141,7 @@ impl Validate for Transition {
 mod tests {
     use super::*;
     use crate::ast::TapeInstruction;
-    use crate::utils::assert_compile_error;
+    use crate::utils::assert_error;
 
     #[test]
     fn test_invalid_state_id_error() {
@@ -155,7 +154,7 @@ mod tests {
             }],
         }
         .validate_into(&());
-        assert_compile_error("Invalid state ID: 0", result);
+        assert_error("Invalid state ID: 0", result);
     }
 
     #[test]
@@ -177,7 +176,7 @@ mod tests {
             ],
         }
         .validate_into(&());
-        assert_compile_error("State ID defined multiple times: 1", result);
+        assert_error("State ID defined multiple times: 1", result);
     }
 
     #[test]
@@ -191,7 +190,7 @@ mod tests {
             }],
         }
         .validate_into(&());
-        assert_compile_error("No state marked as initial", result);
+        assert_error("No state marked as initial", result);
     }
 
     #[test]
@@ -213,10 +212,7 @@ mod tests {
             ],
         }
         .validate_into(&());
-        assert_compile_error(
-            "Multiple states marked as initial: [1, 2]",
-            result,
-        );
+        assert_error("Multiple states marked as initial: [1, 2]", result);
     }
 
     #[test]
@@ -234,7 +230,7 @@ mod tests {
             }],
         }
         .validate_into(&());
-        assert_compile_error("Undefined state: 2", result);
+        assert_error("Undefined state: 2", result);
     }
 
     #[test]
@@ -252,7 +248,7 @@ mod tests {
             }],
         }
         .validate_into(&());
-        assert_compile_error("Invalid character: \x00", result);
+        assert_error("Illegal character: \x00", result);
     }
 
     #[test]
@@ -270,6 +266,6 @@ mod tests {
             }],
         }
         .validate_into(&());
-        assert_compile_error("Invalid character: \u{80}", result);
+        assert_error("Illegal character: \u{80}", result);
     }
 }

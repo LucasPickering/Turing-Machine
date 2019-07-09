@@ -125,34 +125,34 @@ impl Compile for Valid<Program> {
             // Check for ACCEPT
             If(iter::empty()
                 // Print ACCEPT
-                .chain(iter::repeat(IncrActive).take(65)) // A
+                .chain(iter::repeat(IncrActive).take('A' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(67)) // C
+                .chain(iter::repeat(IncrActive).take('C' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(67)) // C
+                .chain(iter::repeat(IncrActive).take('C' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(69)) // E
+                .chain(iter::repeat(IncrActive).take('E' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(80)) // P
+                .chain(iter::repeat(IncrActive).take('P' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(84)) // T
+                .chain(iter::repeat(IncrActive).take('T' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
                 .collect()),
             // We have no if/else so we have to explicitly check for REJECT too
             IncrActive,
             If(iter::empty()
                 // Print REJECT
-                .chain(iter::repeat(IncrActive).take(82)) // R
+                .chain(iter::repeat(IncrActive).take('R' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(69)) // E
+                .chain(iter::repeat(IncrActive).take('E' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(74)) // J
+                .chain(iter::repeat(IncrActive).take('J' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(69)) // E
+                .chain(iter::repeat(IncrActive).take('E' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(67)) // C
+                .chain(iter::repeat(IncrActive).take('C' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take(84)) // T
+                .chain(iter::repeat(IncrActive).take('T' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
                 .collect()),
             PrintState, // Debugging
