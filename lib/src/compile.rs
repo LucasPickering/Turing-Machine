@@ -84,35 +84,38 @@ impl Compile for Valid<Program> {
             // ---------
             // MAIN LOOP
             // ---------
-            While(
-                // TM state at the start of each iteration:
-                // var_a: Current (i.e. desired) state #
-                // var_i: 0
-                // - Left tape (encoded)
-                // - Head char
-                // - ...Right tape
-
-                // Generate code for each state and add it to the loop.
-                // Exactly one state will be executed on each iteration, or
-                // if none match, then we'll halt. See State::compile for
-                // more on how this works, and why we have to sort the states.
-                states
-                    .iter()
-                    .sorted_by_key(|state| state.id)
-                    .map(State::compile)
-                    .flatten()
-                    // var_a: FREE
+            InlineComment(
+                Box::new(While(
+                    // TM state at the start of each iteration:
+                    // var_a: Current (i.e. desired) state #
                     // var_i: 0
-                    // - Next state #
                     // - Left tape (encoded)
                     // - Head char
                     // - ...Right tape
-                    // Get the next state off the stack
-                    .chain(vec![PopToActive])
-                    .collect(),
-                // After execution, if we hit a HALT, then the next state ID
-                // should be 0 to indicate ACCEPT or -1 to indicate REJECT.
-                // Either one will stop the loop, and we can handle it after.
+
+                    // Generate code for each state and add it to the loop.
+                    // Exactly one state will be executed on each iteration, or
+                    // if none match, then we'll halt. See State::compile for
+                    // more on how this works, and why we have to sort the states.
+                    states
+                        .iter()
+                        .sorted_by_key(|state| state.id)
+                        .map(State::compile)
+                        .flatten()
+                        // var_a: FREE
+                        // var_i: 0
+                        // - Next state #
+                        // - Left tape (encoded)
+                        // - Head char
+                        // - ...Right tape
+                        // Get the next state off the stack
+                        .chain(vec![PopToActive])
+                        .collect(),
+                    // After execution, if we hit a HALT, then the next state ID
+                    // should be 0 to indicate ACCEPT or -1 to indicate REJECT.
+                    // Either one will stop the loop, and we can handle it after.
+                )),
+                "Big bang".into(),
             ),
             // --------
             // POSTLUDE
@@ -123,7 +126,7 @@ impl Compile for Valid<Program> {
             // - Head char
             // - ...Right tape
             // Check for ACCEPT
-            If(iter::empty()
+            If(iter::once(Comment("Write 'ACCEPT'".into()))
                 // Print ACCEPT
                 .chain(iter::repeat(IncrActive).take('A' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
@@ -140,7 +143,7 @@ impl Compile for Valid<Program> {
                 .collect()),
             // We have no if/else so we have to explicitly check for REJECT too
             IncrActive,
-            If(iter::empty()
+            If(iter::once(Comment("Write 'REJECT'".into()))
                 // Print REJECT
                 .chain(iter::repeat(IncrActive).take('R' as usize))
                 .chain(vec![PrintActive, PushZero, PopToActive])
@@ -449,6 +452,7 @@ impl Compile for TapeInstruction {
             // H = R
             // LT' = x - 1
             TapeInstruction::Left => vec![
+                Comment("Move left".into()),
                 PushZero,
                 PopToActive,
                 Swap,
@@ -485,6 +489,7 @@ impl Compile for TapeInstruction {
             .collect(),
 
             TapeInstruction::Right => iter::repeat(vec![
+                Comment("Move right".into()),
                 // Similar to left shift, we have to do some tedious math to add a
                 // char to the left tape.
                 // First, we need to free up the bottom n bits in the left tape,
@@ -493,11 +498,9 @@ impl Compile for TapeInstruction {
                 // Don't have that either. Guess we have to add LT to itself
                 // (2^n)-1 times. Seems tractable enough.
 
-                // Load LT into var_a (and in var_i)
+                // Load LT into var_a
                 Swap,
-                PushActive,
-                Swap,
-                PopToActive,
+                SaveActive,
                 // Add LT to var_i
                 While(vec![DecrActive, Swap, IncrActive, Swap]),
             ])
@@ -510,12 +513,17 @@ impl Compile for TapeInstruction {
 
             TapeInstruction::Write(c) => {
                 // Pop the head char to var_a, then reset to 0
-                vec![PopToActive, PushZero, PopToActive]
-                    .into_iter()
-                    // Incr up to the new char value, then push it
-                    .chain(iter::repeat(IncrActive).take(*c as usize))
-                    .chain(vec![PushActive])
-                    .collect()
+                vec![
+                    Comment(format!("Write {} to tape", c)),
+                    PopToActive,
+                    PushZero,
+                    PopToActive,
+                ]
+                .into_iter()
+                // Incr up to the new char value, then push it
+                .chain(iter::repeat(IncrActive).take(*c as usize))
+                .chain(vec![PushActive])
+                .collect()
             }
         }
     }

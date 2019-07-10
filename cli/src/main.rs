@@ -1,4 +1,6 @@
 use failure::Error;
+use serde_json;
+use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tm::TuringMachine;
@@ -31,13 +33,24 @@ enum Opt {
     },
 }
 
+fn tm_from_file(path: &PathBuf) -> Result<TuringMachine, Error> {
+    let contents = fs::read_to_string(path)?;
+    TuringMachine::from_json(&contents)
+}
+
+fn tm_to_file(tm: &TuringMachine, path: &PathBuf) -> Result<(), Error> {
+    let mut contents = serde_json::to_string_pretty(&tm)?;
+    fs::write(path, &mut contents)?;
+    Ok(())
+}
+
 fn run(opt: Opt) -> Result<(), Error> {
     match opt {
         Opt::Execute {
             input_file,
             tape_input,
         } => {
-            let tm = TuringMachine::from_file(&input_file)?;
+            let tm = tm_from_file(&input_file)?;
             tm.run(tape_input)?;
             Ok(())
         }
@@ -45,9 +58,8 @@ fn run(opt: Opt) -> Result<(), Error> {
             input_file,
             output_file,
         } => {
-            let tm = TuringMachine::from_file(&input_file)?;
-            // TODO
-            Ok(())
+            let tm = tm_from_file(&input_file)?;
+            tm_to_file(&tm, &output_file)
         }
     }
 }
@@ -56,6 +68,6 @@ fn main() {
     let opt = Opt::from_args();
     match run(opt) {
         Ok(()) => {}
-        Err(error) => eprintln!("{}", error),
+        Err(error) => eprintln!("{:?}", error),
     }
 }

@@ -1,4 +1,4 @@
-use serde::{Serialize,Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Number of bits used to represent one character in our alphabet.
 /// Restricted to ASCII to maximize stack length when it gets encoded to a

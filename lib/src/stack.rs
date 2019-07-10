@@ -1,3 +1,5 @@
+use serde::Serialize;
+use std::fmt::{self, Display, Formatter};
 use std::io::{Bytes, Read, Write};
 
 /// The size of each register. For tape encoding, we're using 7 bits per char,
@@ -5,7 +7,7 @@ use std::io::{Bytes, Read, Write};
 type Value = i64;
 
 /// One step to run on the stack machine
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum SmInstruction {
     /// Reads one byte from input and sets the active variable to it. If there
     /// is nothing in the input to read, this does nothing.
@@ -72,14 +74,28 @@ pub enum SmInstruction {
     /// Rocketlang doesn't support comments, so this is for debugging only.
     /// These comments will need to be stripped before passing the source to
     /// the Rocketlang interpreter.
-    Comment(&'static str),
+    Comment(String),
 
     /// A comment that goes on the same line as an instruction
     ///
     /// Rocketlang doesn't support comments, so this is for debugging only.
     /// These comments will need to be stripped before passing the source to
     /// the Rocketlang interpreter.
-    InlineComment(Box<Self>, &'static str),
+    InlineComment(Box<Self>, String),
+}
+
+impl Display for SmInstruction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            SmInstruction::Comment(comment) => write!(f, "// {}", comment),
+            SmInstruction::InlineComment(instr, comment) => {
+                write!(f, "{} // {}", instr, comment)
+            }
+            // By default just use the debug name
+            _ => write!(f, "{:?}\n\n\n\n\n\n", self),
+        }?;
+        writeln!(f) // End the line
+    }
 }
 
 /// A direct equivalent of the rocketlang interpreter, equally as powerful.
@@ -339,7 +355,7 @@ mod tests {
     fn test_comment() {
         let mut sm = make_sm();
         // Comment does nothing
-        sm.run(&[Comment("Comment!")]);
+        sm.run(&[Comment("Comment!".into())]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 0);
         assert!(sm.stack.is_empty());
@@ -349,7 +365,7 @@ mod tests {
     fn test_inline_comment() {
         let mut sm = make_sm();
         // Comment does nothing
-        sm.run(&[InlineComment(Box::new(IncrActive), "Comment!")]);
+        sm.run(&[InlineComment(Box::new(IncrActive), "Comment!".into())]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 0);
         assert!(sm.stack.is_empty());

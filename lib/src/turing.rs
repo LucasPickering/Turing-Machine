@@ -6,9 +6,9 @@ use crate::{
     validate::Validate,
 };
 use failure::Error;
-use std::fs;
+use std::fmt::{self, Display, Formatter};
 use std::io;
-use std::path::PathBuf;
+use serde::Serialize;
 
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
 /// that Rocketlang is Turing-complete.
@@ -21,7 +21,7 @@ use std::path::PathBuf;
 ///
 /// This has the external API of a TM, but internally only uses the two-variable
 /// stack machine from Rocketlang.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TuringMachine {
     instructions: Vec<SmInstruction>,
 }
@@ -37,9 +37,8 @@ impl TuringMachine {
         })
     }
 
-    pub fn from_file(path: &PathBuf) -> Result<Self, Error> {
-        let contents = fs::read_to_string(path)?;
-        let program = serde_json::from_str(&contents)?;
+    pub fn from_json(json: &str) -> Result<Self, Error> {
+        let program = serde_json::from_str(&json)?;
         Self::new(program)
     }
 
@@ -60,6 +59,16 @@ impl TuringMachine {
     }
 }
 
+impl Display for TuringMachine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for instruction in &self.instructions {
+            writeln!(f, "{}", instruction)?;
+        }
+        writeln!(f, "{:?}", self)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,6 +79,11 @@ mod tests {
     /// upper bits are non-zero, they are lost and the character is mutated.
     fn char_to_u8(c: char) -> u8 {
         c as u8
+    }
+
+    fn assert_tm(tm: &TuringMachine, input: &str, should_accept: bool) {
+        // We have to reverse the input cause TMing is hard
+        assert!(tm.run(input.chars().rev().collect()).is_ok(), "{}", tm);
     }
 
     #[test]
@@ -158,6 +172,7 @@ mod tests {
             ],
         })
         .unwrap();
-        assert!(tm.run("foo".into()).is_ok());
+        println!("{}", serde_json::to_string(&tm.instructions).unwrap());
+        assert_tm(&tm, "foo", true);
     }
 }
