@@ -1,5 +1,4 @@
 use failure::Error;
-use serde_json;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -39,7 +38,7 @@ fn tm_from_file(path: &PathBuf) -> Result<TuringMachine, Error> {
 }
 
 fn tm_to_file(tm: &TuringMachine, path: &PathBuf) -> Result<(), Error> {
-    let mut contents = serde_json::to_string_pretty(&tm)?;
+    let mut contents = format!("{}", tm);
     fs::write(path, &mut contents)?;
     Ok(())
 }

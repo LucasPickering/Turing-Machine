@@ -84,17 +84,64 @@ pub enum SmInstruction {
     InlineComment(Box<Self>, String),
 }
 
-impl Display for SmInstruction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl SmInstruction {
+    /// Adds the given number of indentations.
+    fn write_indents(f: &mut Formatter<'_>, indents: usize) -> fmt::Result {
+        for _ in 0..indents {
+            write!(f, "\t")?;
+        }
+        Ok(())
+    }
+
+    /// Formats a set of nested instructions. Wraps them in braces too, with
+    /// the given label. Fun!
+    fn fmt_nested(
+        f: &mut Formatter<'_>,
+        label: &str,
+        instrs: &[Self],
+        indents: usize,
+    ) -> fmt::Result {
+        writeln!(f, "{} {{", label)?;
+        for instr in instrs {
+            // Nested lines handle their own indentation
+            instr.fmt_indented(f, indents + 1)?;
+            writeln!(f)?;
+        }
+        Self::write_indents(f, indents)?;
+        write!(f, "}}")
+    }
+
+    /// Formats this instruction with the specified number of indents.
+    /// Tree recursion!
+    fn fmt_indented(
+        &self,
+        f: &mut Formatter<'_>,
+        indents: usize,
+    ) -> fmt::Result {
+        // Add the indentation for the first line
+        Self::write_indents(f, indents)?;
+
         match self {
+            SmInstruction::If(subinstrs) => {
+                Self::fmt_nested(f, "If", &subinstrs, indents)
+            }
+            SmInstruction::While(subinstrs) => {
+                Self::fmt_nested(f, "While", &subinstrs, indents)
+            }
             SmInstruction::Comment(comment) => write!(f, "// {}", comment),
             SmInstruction::InlineComment(instr, comment) => {
-                write!(f, "{} // {}", instr, comment)
+                instr.fmt_indented(f, indents + 1)?;
+                write!(f, " // {}", comment)
             }
             // By default just use the debug name
-            _ => write!(f, "{:?}\n\n\n\n\n\n", self),
-        }?;
-        writeln!(f) // End the line
+            _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
+impl Display for SmInstruction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.fmt_indented(f, 0)
     }
 }
 

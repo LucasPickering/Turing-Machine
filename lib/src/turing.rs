@@ -6,9 +6,9 @@ use crate::{
     validate::Validate,
 };
 use failure::Error;
+use serde::Serialize;
 use std::fmt::{self, Display, Formatter};
 use std::io;
-use serde::Serialize;
 
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
 /// that Rocketlang is Turing-complete.
@@ -64,7 +64,6 @@ impl Display for TuringMachine {
         for instruction in &self.instructions {
             writeln!(f, "{}", instruction)?;
         }
-        writeln!(f, "{:?}", self)?;
         Ok(())
     }
 }
