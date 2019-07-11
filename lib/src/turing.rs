@@ -8,7 +8,7 @@ use crate::{
 use failure::Error;
 use serde::Serialize;
 use std::fmt::{self, Display, Formatter};
-use std::io;
+use std::io::{self, Write};
 
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
 /// that Rocketlang is Turing-complete.
@@ -21,6 +21,9 @@ use std::io;
 ///
 /// This has the external API of a TM, but internally only uses the two-variable
 /// stack machine from Rocketlang.
+///
+/// The output of this machine is either "ACCEPT" or "REJECT". See the
+/// individual run functions to determine where the output destination is.
 #[derive(Debug, Serialize)]
 pub struct TuringMachine {
     instructions: Vec<SmInstruction>,
@@ -42,7 +45,13 @@ impl TuringMachine {
         Self::new(program)
     }
 
-    pub fn run(&self, input: String) -> Result<(), Error> {
+    /// Helper function to execute the machine with the given input string and
+    /// output destination.
+    fn run_with_io<W: Write>(
+        &self,
+        input: String,
+        output: &mut W,
+    ) -> Result<(), Error> {
         // Validate each input character
         let illegal_chars: Vec<char> = input
             .chars()
@@ -50,12 +59,26 @@ impl TuringMachine {
             .collect();
 
         if illegal_chars.is_empty() {
-            let mut machine = StackMachine::new(input.as_bytes(), io::stdout());
-            machine.run(&self.instructions);
+            let mut machine = StackMachine::new();
+            machine.run(input.as_bytes(), output, &self.instructions);
             Ok(())
         } else {
             Err(RuntimeError::IllegalInputCharacters(illegal_chars).into())
         }
+    }
+
+    /// Executes this machine on the given input. Uses stdout as the output
+    /// stream.
+    pub fn run(&self, input: String) -> Result<(), Error> {
+        self.run_with_io(input, &mut io::stdout())
+    }
+
+    /// Executes this machine on the given input. Returns a byte vector that
+    /// contains all of the output from the machine.
+    pub fn run_with_output(&self, input: String) -> Result<Vec<u8>, Error> {
+        let mut output_buffer = Vec::new();
+        self.run_with_io(input, &mut output_buffer)?;
+        Ok(output_buffer)
     }
 }
 
@@ -80,9 +103,21 @@ mod tests {
         c as u8
     }
 
-    fn assert_tm(tm: &TuringMachine, input: &str, should_accept: bool) {
+    fn assert_tm(
+        tm: &TuringMachine,
+        input: &str,
+        should_accept: bool,
+    ) -> Result<(), Error> {
         // We have to reverse the input cause TMing is hard
-        assert!(tm.run(input.chars().rev().collect()).is_ok(), "{}", tm);
+        let output = tm.run_with_output(input.chars().rev().collect())?;
+        let output_string = String::from_utf8(output).unwrap();
+        let expected_output = if should_accept { "ACCEPT" } else { "REJECT" };
+        assert!(
+            output_string.ends_with(expected_output),
+            "TM returned wrong output: {}",
+            output_string
+        );
+        Ok(())
     }
 
     #[test]
@@ -128,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_machine() {
+    fn test_simple_machine() -> Result<(), Error> {
         // Machine matches the string "foo"
         let tm = TuringMachine::new(Program {
             states: vec![
@@ -171,7 +206,6 @@ mod tests {
             ],
         })
         .unwrap();
-        println!("{}", serde_json::to_string(&tm.instructions).unwrap());
-        assert_tm(&tm, "foo", true);
+        assert_tm(&tm, "foo", true)
     }
 }

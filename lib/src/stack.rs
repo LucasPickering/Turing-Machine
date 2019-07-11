@@ -148,26 +148,22 @@ impl Display for SmInstruction {
 /// A direct equivalent of the rocketlang interpreter, equally as powerful.
 /// All other machines must be built on top of this, so we know they can be
 /// built in rocketlang.
-pub struct StackMachine<R: Read, W: Write> {
+pub struct StackMachine {
     active_var: Value,
     inactive_var: Value,
     stack: Vec<Value>,
     errors_enabled: bool,
-    reader: Bytes<R>,
-    writer: W,
 }
 
-impl<R: Read, W: Write> StackMachine<R, W> {
+impl StackMachine {
     /// Creates a new machine that reads from the given reader and writes to
     /// the given writer.
-    pub fn new(reader: R, writer: W) -> Self {
+    pub fn new() -> Self {
         Self {
             active_var: 0,
             inactive_var: 0,
             stack: Vec::new(),
             errors_enabled: true,
-            reader: reader.bytes(),
-            writer,
         }
     }
 
@@ -178,12 +174,17 @@ impl<R: Read, W: Write> StackMachine<R, W> {
     }
 
     /// Runs a single instruction on this machine.
-    fn run_instruction(&mut self, instruction: &SmInstruction) {
+    fn run_instruction<R: Read, W: Write>(
+        &mut self,
+        reader: &mut Bytes<R>,
+        writer: &mut W,
+        instruction: &SmInstruction,
+    ) {
         match instruction {
             SmInstruction::ReadToActive => {
                 // Read one byte from stdin. If there is nothing to read, do
                 // nothing.
-                if let Some(res_b) = self.reader.next() {
+                if let Some(res_b) = reader.next() {
                     match res_b {
                         Ok(b) => self.active_var = i64::from(b),
                         Err(error) => {
@@ -198,7 +199,7 @@ impl<R: Read, W: Write> StackMachine<R, W> {
             SmInstruction::PrintActive => {
                 // Write the lowest 4 bytes, to represent a Unicode char
                 let to_write = &self.active_var.to_be_bytes()[4..];
-                match self.writer.write_all(to_write) {
+                match writer.write_all(to_write) {
                     Ok(()) => {}
                     Err(error) => {
                         self.error_if_enabled(&format!(
@@ -213,7 +214,7 @@ impl<R: Read, W: Write> StackMachine<R, W> {
                     "\nActive: {}\nInactive: {}\nStack: {:?}\n",
                     self.active_var, self.inactive_var, self.stack
                 );
-                match self.writer.write_all(to_write.as_bytes()) {
+                match writer.write_all(to_write.as_bytes()) {
                     Ok(()) => {}
                     Err(error) => {
                         self.error_if_enabled(&format!(
@@ -257,28 +258,35 @@ impl<R: Read, W: Write> StackMachine<R, W> {
             SmInstruction::If(subinstrs) => {
                 if self.active_var == self.inactive_var {
                     for subinstr in subinstrs {
-                        self.run_instruction(subinstr)
+                        self.run_instruction(reader, writer, subinstr)
                     }
                 }
             }
             SmInstruction::While(subinstrs) => {
                 while self.active_var > 0 {
                     for subinstr in subinstrs {
-                        self.run_instruction(subinstr)
+                        self.run_instruction(reader, writer, subinstr)
                     }
                 }
             }
             SmInstruction::Comment(_) => {}
             SmInstruction::InlineComment(subinstr, _) => {
-                self.run_instruction(subinstr)
+                self.run_instruction(reader, writer, subinstr)
             }
         }
     }
 
-    /// Runs all given instructions on this machine.
-    pub fn run(&mut self, instructions: &[SmInstruction]) {
+    /// Runs all given instructions on this machine, using the given input
+    /// and output.
+    pub fn run<R: Read, W: Write>(
+        &mut self,
+        reader: R,
+        writer: &mut W,
+        instructions: &[SmInstruction],
+    ) {
+        let mut reader_bytes = reader.bytes();
         for instruction in instructions {
-            self.run_instruction(instruction)
+            self.run_instruction(&mut reader_bytes, writer, instruction)
         }
     }
 }
@@ -286,69 +294,69 @@ impl<R: Read, W: Write> StackMachine<R, W> {
 #[cfg(test)]
 mod tests {
     use super::{SmInstruction::*, *};
+    use std::io;
 
-    fn make_sm() -> StackMachine<&'static [u8], Vec<u8>> {
-        StackMachine::new(b"", Vec::new())
+    fn run_machine(sm: &mut StackMachine, instructions: &[SmInstruction]) {
+        sm.run(io::empty(), &mut Vec::new(), instructions);
     }
 
     #[test]
     fn test_read_to_active() {
-        let mut sm: StackMachine<&'static [u8], Vec<u8>> =
-            StackMachine::new(b"\x09", Vec::new());
-        sm.run(&[ReadToActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[ReadToActive]);
         assert_eq!(sm.active_var, 9);
     }
 
     #[test]
     fn test_incr_active() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[IncrActive]);
         assert_eq!(sm.active_var, 1);
     }
 
     #[test]
     fn test_decr_active() {
-        let mut sm = make_sm();
-        sm.run(&[DecrActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[DecrActive]);
         assert_eq!(sm.active_var, -1);
     }
 
     #[test]
     fn test_save_active() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive, SaveActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[IncrActive, SaveActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 1);
     }
 
     #[test]
     fn test_swap() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive, Swap]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[IncrActive, Swap]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
     }
 
     #[test]
     fn test_push_zero() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive, PushZero]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[IncrActive, PushZero]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[0]);
     }
 
     #[test]
     fn test_push_active() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive, PushActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[IncrActive, PushActive]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(&sm.stack, &[1]);
     }
 
     #[test]
     fn test_pop_to_active() {
-        let mut sm = make_sm();
-        sm.run(&[IncrActive, PushZero, PopToActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[IncrActive, PushZero, PopToActive]);
         assert_eq!(sm.active_var, 0);
         assert!(&sm.stack.is_empty());
     }
@@ -356,53 +364,56 @@ mod tests {
     #[test]
     #[should_panic(expected = "Pop on empty")]
     fn test_pop_to_active_on_empty_error() {
-        let mut sm = make_sm();
-        sm.run(&[PopToActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[PopToActive]);
     }
 
     #[test]
     fn test_pop_to_active_on_empty_no_error() {
-        let mut sm = make_sm();
-        sm.run(&[ToggleErrors, PopToActive]);
+        let mut sm = StackMachine::new();
+        run_machine(&mut sm, &[ToggleErrors, PopToActive]);
     }
 
     #[test]
     fn test_if_positive() {
-        let mut sm = make_sm();
+        let mut sm = StackMachine::new();
         // If DOES run
-        sm.run(&[If(vec![IncrActive, Swap])]);
+        run_machine(&mut sm, &[If(vec![IncrActive, Swap])]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 1);
     }
 
     #[test]
     fn test_if_negative() {
-        let mut sm = make_sm();
+        let mut sm = StackMachine::new();
         // If DOESN'T run
-        sm.run(&[IncrActive, If(vec![Swap])]);
+        run_machine(&mut sm, &[IncrActive, If(vec![Swap])]);
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 0);
     }
 
     #[test]
     fn test_while() {
-        let mut sm = make_sm();
+        let mut sm = StackMachine::new();
         // If DOESN'T run
-        sm.run(&[
-            IncrActive,
-            IncrActive,
-            IncrActive,
-            While(vec![PushZero, DecrActive]),
-        ]);
+        run_machine(
+            &mut sm,
+            &[
+                IncrActive,
+                IncrActive,
+                IncrActive,
+                While(vec![PushZero, DecrActive]),
+            ],
+        );
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.stack, &[0, 0, 0]);
     }
 
     #[test]
     fn test_comment() {
-        let mut sm = make_sm();
+        let mut sm = StackMachine::new();
         // Comment does nothing
-        sm.run(&[Comment("Comment!".into())]);
+        run_machine(&mut sm, &[Comment("Comment!".into())]);
         assert_eq!(sm.active_var, 0);
         assert_eq!(sm.inactive_var, 0);
         assert!(sm.stack.is_empty());
@@ -410,9 +421,12 @@ mod tests {
 
     #[test]
     fn test_inline_comment() {
-        let mut sm = make_sm();
+        let mut sm = StackMachine::new();
         // Comment does nothing
-        sm.run(&[InlineComment(Box::new(IncrActive), "Comment!".into())]);
+        run_machine(
+            &mut sm,
+            &[InlineComment(Box::new(IncrActive), "Comment!".into())],
+        );
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 0);
         assert!(sm.stack.is_empty());
