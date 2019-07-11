@@ -1,14 +1,16 @@
 use crate::{
     ast::Program,
     compile::Compile,
-    error::RuntimeError,
     stack::{SmInstruction, StackMachine},
+    utils::validate_char,
     validate::Validate,
 };
 use failure::Error;
 use serde::Serialize;
-use std::fmt::{self, Display, Formatter};
-use std::io::{self, Write};
+use std::{
+    fmt::{self, Display, Formatter},
+    io::{self, Write},
+};
 
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
 /// that Rocketlang is Turing-complete.
@@ -52,19 +54,13 @@ impl TuringMachine {
         input: String,
         output: &mut W,
     ) -> Result<(), Error> {
-        // Validate each input character
-        let illegal_chars: Vec<char> = input
-            .chars()
-            .filter(|c| !c.is_ascii() || *c == '\x00')
-            .collect();
-
-        if illegal_chars.is_empty() {
-            let mut machine = StackMachine::new();
-            machine.run(input.as_bytes(), output, &self.instructions);
-            Ok(())
-        } else {
-            Err(RuntimeError::IllegalInputCharacters(illegal_chars).into())
+        for c in input.chars() {
+            validate_char(c)?;
         }
+
+        let mut machine = StackMachine::new();
+        machine.run(input.as_bytes(), output, &self.instructions);
+        Ok(())
     }
 
     /// Executes this machine on the given input. Uses stdout as the output
@@ -94,14 +90,10 @@ impl Display for TuringMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{State, TapeInstruction, Transition};
-    use crate::utils::assert_error;
-
-    /// Converts the given character to a byte by taking the lowest 8 bits. If any
-    /// upper bits are non-zero, they are lost and the character is mutated.
-    fn char_to_u8(c: char) -> u8 {
-        c as u8
-    }
+    use crate::{
+        ast::{State, TapeInstruction, Transition},
+        utils::assert_error,
+    };
 
     fn assert_tm(
         tm: &TuringMachine,
@@ -114,7 +106,8 @@ mod tests {
         let expected_output = if should_accept { "ACCEPT" } else { "REJECT" };
         assert!(
             output_string.ends_with(expected_output),
-            "TM returned wrong output: {}",
+            "TM returned wrong output. Expected \"{}\", got:\n{}",
+            expected_output,
             output_string
         );
         Ok(())
@@ -172,7 +165,7 @@ mod tests {
                     initial: true,
                     accepting: false,
                     transitions: vec![Transition {
-                        match_char: char_to_u8('f'),
+                        match_char: 'f',
                         tape_instruction: TapeInstruction::Right,
                         next_state: 2,
                     }],
@@ -182,7 +175,7 @@ mod tests {
                     initial: false,
                     accepting: false,
                     transitions: vec![Transition {
-                        match_char: char_to_u8('o'),
+                        match_char: 'o',
                         tape_instruction: TapeInstruction::Right,
                         next_state: 3,
                     }],
@@ -192,7 +185,7 @@ mod tests {
                     initial: false,
                     accepting: false,
                     transitions: vec![Transition {
-                        match_char: char_to_u8('o'),
+                        match_char: 'o',
                         tape_instruction: TapeInstruction::Right,
                         next_state: 4,
                     }],

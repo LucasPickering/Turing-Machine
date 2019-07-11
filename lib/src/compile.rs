@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Char, Program, State, TapeInstruction, Transition, ALPHABET_SIZE},
+    ast::{Program, State, TapeInstruction, Transition, ALPHABET_SIZE},
     stack::SmInstruction::{self, *},
     validate::Valid,
 };
@@ -57,7 +57,7 @@ impl Compile for Valid<Program> {
             // -------
             // PRELUDE
             // -------
-            ToggleErrors, // Disable errors
+            InlineComment(Box::new(ToggleErrors), "Disable errors".into()),
             // Read the input string onto the tape. For convenience, assume the
             // input is reversed, e.g. "foo" is actually "oof". \x00 is
             // considered the empty char in our alphabet, so if we reach one
@@ -84,38 +84,36 @@ impl Compile for Valid<Program> {
             // ---------
             // MAIN LOOP
             // ---------
-            InlineComment(
-                Box::new(While(
-                    // TM state at the start of each iteration:
-                    // var_a: Current (i.e. desired) state #
+            While(
+                // TM state at the start of each iteration:
+                // var_a: Current (i.e. desired) state #
+                // var_i: 0
+                // - Left tape (encoded)
+                // - Head char
+                // - ...Right tape
+
+                // Generate code for each state and add it to the loop.
+                // Exactly one state will be executed on each iteration, or
+                // if none match, then we'll halt. See State::compile for
+                // more on how this works, and why we have to sort the states.
+                states
+                    .iter()
+                    .sorted_by_key(|state| state.id)
+                    .map(State::compile)
+                    .flatten()
+                    // var_a: FREE
                     // var_i: 0
+                    // - Next state #
                     // - Left tape (encoded)
                     // - Head char
                     // - ...Right tape
-
-                    // Generate code for each state and add it to the loop.
-                    // Exactly one state will be executed on each iteration, or
-                    // if none match, then we'll halt. See State::compile for
-                    // more on how this works, and why we have to sort the states.
-                    states
-                        .iter()
-                        .sorted_by_key(|state| state.id)
-                        .map(State::compile)
-                        .flatten()
-                        // var_a: FREE
-                        // var_i: 0
-                        // - Next state #
-                        // - Left tape (encoded)
-                        // - Head char
-                        // - ...Right tape
-                        // Get the next state off the stack
-                        .chain(vec![PopToActive])
-                        .collect(),
-                    // After execution, if we hit a HALT, then the next state ID
-                    // should be 0 to indicate ACCEPT or -1 to indicate REJECT.
-                    // Either one will stop the loop, and we can handle it after.
-                )),
-                "Big bang".into(),
+                    // Get the next state off the stack
+                    .chain(vec![PopToActive])
+                    .collect(),
+                /* After execution, if we hit a HALT, then the next state ID
+                 * should be 0 to indicate ACCEPT or -1 to indicate REJECT.
+                 * Either one will stop the loop, and we can handle it
+                 * after. */
             ),
             // --------
             // POSTLUDE
@@ -165,8 +163,8 @@ impl Compile for Valid<Program> {
 }
 
 impl Compile for State {
-    /// Compiles logic for a single state, including the If with all internal logic
-    /// and the following Decr to step to the next state to check.
+    /// Compiles logic for a single state, including the If with all internal
+    /// logic and the following Decr to step to the next state to check.
     ///
     /// If this state executes, both variables will be reset to 0. Because a
     /// Decr will occur before the next state If, no subsequent state Ifs will
@@ -195,10 +193,10 @@ impl Compile for State {
     /// - Head char
     /// - ...Right tape
     fn compile(&self) -> Vec<SmInstruction> {
-        // The state counter starts at n (desired state #), and counts down to 0.
-        // It will hit 0 on the nth state check, and the If condition will match.
-        // This means the states have to be sorted by ascending ID, so that State n
-        // is the nth block.
+        // The state counter starts at n (desired state #), and counts down to
+        // 0. It will hit 0 on the nth state check, and the If condition
+        // will match. This means the states have to be sorted by
+        // ascending ID, so that State n is the nth block.
 
         // Setup logic for switching on the head char
         vec![
@@ -233,18 +231,21 @@ impl Compile for State {
                 // - Left tape (encoded)
                 // - ...Right tape
                 .chain(vec![
-                    // HALT transition to handle the case where none of the other
-                    // transitions matched. We need to either ACCEPT or REJECT here,
+                    // HALT transition to handle the case where none of the
+                    // other transitions matched. We need
+                    // to either ACCEPT or REJECT here,
                     // based on the definition of this state.
-                    // To check if any transitions matched, we can use a loop to
-                    // tell if var_i is >=0. The loop checks var_a > 0, so we need
+                    // To check if any transitions matched, we can use a loop
+                    // to tell if var_i is >=0. The loop
+                    // checks var_a > 0, so we need
                     // a Swap and Incr.
                     Swap,
                     IncrActive, // In case Head char == 0
                     // This loop will never run more than once!
                     While(
                         vec![
-                            DecrActive,  // Undo the Incr now that we know we entered
+                            DecrActive,  /* Undo the Incr now that we know
+                                          * we entered */
                             Swap,        // var_a is free now
                             PopToActive, // Pop LT
                             Swap,        // var_a = HC, var_i = LT
@@ -269,12 +270,12 @@ impl Compile for State {
                         })
                         .collect(),
                     ),
-                    // var_a: 0
-                    // var_i: 0
-                    // - Next state # (or 0 for ACCEPT, -1 for REJECT)
-                    // - Left tape (encoded)
-                    // - Head char
-                    // - ...Right tape
+                    /* var_a: 0
+                     * var_i: 0
+                     * - Next state # (or 0 for ACCEPT, -1 for REJECT)
+                     * - Left tape (encoded)
+                     * - Head char
+                     * - ...Right tape */
                 ])
                 .collect(),
             ),
@@ -321,7 +322,7 @@ impl Compile for [Transition] {
         // to decr from the head char, but then we're trashing it unnecessarily
         // and need to include extra Incrs to get it back.
 
-        let keyed_by_char: HashMap<Char, &Transition> = self
+        let keyed_by_char: HashMap<char, &Transition> = self
             .iter()
             .map(|transition| (transition.match_char, transition))
             .collect();
@@ -336,7 +337,7 @@ impl Compile for [Transition] {
                 // just add an Incr and move on.
                 let mut instrs = Vec::new();
 
-                if let Some(transition) = keyed_by_char.get(&(c as u8)) {
+                if let Some(transition) = keyed_by_char.get(&(c as char)) {
                     instrs.push(If(transition.compile()));
                 }
                 instrs.push(IncrActive);
@@ -437,7 +438,8 @@ impl Compile for TapeInstruction {
             // SIZE: Alphabet size, i.e. 2^n where n is the char size in bits
             // H: Head Char value after the shift
             // x: Number of times we subtract SIZE from LT to make LT<=0
-            // R: Remainder after computing (LT / SIZE) (i.e. val of lowest n bits)
+            // R: Remainder after computing (LT / SIZE) (i.e. val of lowest n
+            // bits)
 
             // EQ1:
             // LT = (LT' * SIZE) + H         : By definition of the tape
@@ -459,21 +461,23 @@ impl Compile for TapeInstruction {
                 While(
                     // State before each iteration:
                     // var_a: Left tape (partially divided)
-                    // var_i: Decr counter (# of times we've subtracted SIZE from LT)
+                    // var_i: Decr counter (# of times we've subtracted SIZE
+                    // from LT)
                     // - ...Right tape
                     iter::repeat(DecrActive)
-                        .take(ALPHABET_SIZE)
+                        .take(ALPHABET_SIZE as usize)
                         .chain(vec![Swap, IncrActive, Swap])
                         .collect(),
                 ),
-                // This terminates when LT goes negative, so state is now:
-                // var_a: LT remainder minus SIZE (i.e. with one extra subtraction)
-                // var_i: Decr counter (# of times we subtracted SIZE from LT)
-                // - ...Right tape
+                /* This terminates when LT goes negative, so state is now:
+                 * var_a: LT remainder minus SIZE (i.e. with one extra
+                 * subtraction) var_i: Decr counter (# of
+                 * times we subtracted SIZE from LT)
+                 * - ...Right tape */
             ]
             .into_iter()
             // Add SIZE back to the remainder to get the new Head value
-            .chain(iter::repeat(IncrActive).take(ALPHABET_SIZE))
+            .chain(iter::repeat(IncrActive).take(ALPHABET_SIZE as usize))
             // This won't terminate until LT goes negative, so state is:
             // var_a: LT remainder (i.e. NEW head char)
             // var_i: Decr counter (# of times we subtracted SIZE from LT)
@@ -490,12 +494,13 @@ impl Compile for TapeInstruction {
 
             TapeInstruction::Right => iter::repeat(vec![
                 Comment("Move right".into()),
-                // Similar to left shift, we have to do some tedious math to add a
-                // char to the left tape.
-                // First, we need to free up the bottom n bits in the left tape,
-                // where n is the number of bits in a char. Just do LT << n.
-                // Oh wait... we don't have bit ops. Let's do LT * 2^n. Shit.
-                // Don't have that either. Guess we have to add LT to itself
+                // Similar to left shift, we have to do some tedious math to
+                // add a char to the left tape.
+                // First, we need to free up the bottom n bits in the left
+                // tape, where n is the number of bits in a
+                // char. Just do LT << n. Oh wait... we don't
+                // have bit ops. Let's do LT * 2^n. Shit. Don't
+                // have that either. Guess we have to add LT to itself
                 // (2^n)-1 times. Seems tractable enough.
 
                 // Load LT into var_a
@@ -504,7 +509,7 @@ impl Compile for TapeInstruction {
                 // Add LT to var_i
                 While(vec![DecrActive, Swap, IncrActive, Swap]),
             ])
-            .take(ALPHABET_SIZE - 1)
+            .take((ALPHABET_SIZE - 1) as usize)
             .flatten()
             // Now put the head char back in var_a, then add its value to the
             // lowest n bits of the left tape

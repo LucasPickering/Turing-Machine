@@ -1,8 +1,10 @@
-use crate::ast::{StateId, Char};
-use failure::{ Fail};
+use crate::ast::StateId;
+use failure::Fail;
 use itertools::Itertools;
-use std::fmt::{self, Display, Formatter};
-use std::ops::Deref;
+use std::{
+    fmt::{self, Display, Formatter},
+    ops::Deref,
+};
 
 #[derive(Debug, Fail)]
 pub enum CompilerError {
@@ -17,20 +19,13 @@ pub enum CompilerError {
     #[fail(display = "Undefined state: {}", 0)]
     UndefinedState(StateId),
     #[fail(display = "Illegal character: {}", 0)]
-    IllegalCharacter(Char),
+    IllegalCharacter(char),
 }
 
 /// Container for holding multiple compiler errors. This is the most common way
 /// to report errors.
 #[derive(Debug, Fail)]
 pub struct CompilerErrors(Vec<CompilerError>);
-
-/// An error that occurs in a machine at runtime
-#[derive(Debug, Fail)]
-pub enum RuntimeError {
-    #[fail(display = "Illegal characters in input: {:?}", 0)]
-    IllegalInputCharacters(Vec<char>),
-}
 
 impl CompilerErrors {
     pub fn new(errors: Vec<CompilerError>) -> Self {

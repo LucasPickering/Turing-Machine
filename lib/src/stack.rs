@@ -1,6 +1,8 @@
 use serde::Serialize;
-use std::fmt::{self, Display, Formatter};
-use std::io::{Bytes, Read, Write};
+use std::{
+    fmt::{self, Display, Formatter},
+    io::{Bytes, Read, Write},
+};
 
 /// The size of each register. For tape encoding, we're using 7 bits per char,
 /// so this gives us 9 chars with one extra bit for the sign.
@@ -296,15 +298,23 @@ mod tests {
     use super::{SmInstruction::*, *};
     use std::io;
 
+    fn run_machine_with_input<R: Read>(
+        sm: &mut StackMachine,
+        instructions: &[SmInstruction],
+        input: R,
+    ) {
+        sm.run(input, &mut Vec::new(), instructions);
+    }
+
     fn run_machine(sm: &mut StackMachine, instructions: &[SmInstruction]) {
-        sm.run(io::empty(), &mut Vec::new(), instructions);
+        run_machine_with_input(sm, instructions, io::empty())
     }
 
     #[test]
     fn test_read_to_active() {
         let mut sm = StackMachine::new();
-        run_machine(&mut sm, &[ReadToActive]);
-        assert_eq!(sm.active_var, 9);
+        run_machine_with_input(&mut sm, &[ReadToActive], &b"wee"[..]);
+        assert_eq!(sm.active_var, 119);
     }
 
     #[test]

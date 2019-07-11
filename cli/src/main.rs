@@ -1,6 +1,5 @@
 use failure::Error;
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 use structopt::StructOpt;
 use tm::TuringMachine;
 
