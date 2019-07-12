@@ -36,6 +36,34 @@ use std::{collections::HashMap, iter};
 ///
 /// I've made some modifications to KG's code where necessary.
 
+macro_rules! state_comment {
+    ( $active:expr, $inactive:expr, [$( $se:expr ),*] ) => {
+        Comment(format!(
+            "Active: {}; Inactive: {}; [{}]",
+            $active,
+            $inactive,
+            concat!($($se, ", "),*),
+        ))
+    }
+}
+
+macro_rules! print_string {
+    ( $s:expr ) => {
+        iter::once(Comment(format!("Print '{}'", $s))).chain(
+            $s.chars()
+                .chain(iter::once('\n'))
+                .map(|c| {
+                    iter::repeat(IncrActive).take(c as usize).chain(vec![
+                        PrintActive,
+                        PushZero,
+                        PopToActive,
+                    ])
+                })
+                .flatten(),
+        )
+    };
+}
+
 /// Defines compilation steps for a single type.
 pub trait Compile {
     /// Generates a sequence of instructions that execute the steps necessary
@@ -52,12 +80,11 @@ impl Compile for Valid<Program> {
             "No initial state defined! Something went wrong in validation.",
         );
 
-        // TODO Figure out places where we can optimize with SaveActive
         vec![
             // -------
             // PRELUDE
             // -------
-            InlineComment(Box::new(ToggleErrors), "Disable errors".into()),
+            InlineComment(box ToggleErrors, "Disable errors".into()),
             // Read the input string onto the tape. For convenience, assume the
             // input is reversed, e.g. "foo" is actually "oof". \x00 is
             // considered the empty char in our alphabet, so if we reach one
@@ -68,12 +95,13 @@ impl Compile for Valid<Program> {
             // end up input, reading will not modify var_a. We can use this
             // to terminate when we've reached the end, by resetting var_a to
             // 0 before each read.
+            Comment("Read input onto stack (in reverse)".into()),
             ReadToActive,
             While(vec![PushActive, PushZero, PopToActive, ReadToActive]),
             PushZero, // Set initial left tape to 0
+            Comment("Set initial state".into()),
         ]
         .into_iter()
-        // Set the initial state
         .chain(iter::repeat(IncrActive).take(initial_state.id))
         // var_a: Initial state ID
         // var_i: 0
@@ -84,6 +112,12 @@ impl Compile for Valid<Program> {
             // ---------
             // MAIN LOOP
             // ---------
+            state_comment!(
+                "Initial state ID",
+                "0",
+                ["0", "Head", "...Right tape"]
+            ),
+            Comment("Main loop".into()),
             While(
                 // TM state at the start of each iteration:
                 // var_a: Current (i.e. desired) state #
@@ -124,38 +158,10 @@ impl Compile for Valid<Program> {
             // - Head char
             // - ...Right tape
             // Check for ACCEPT
-            If(iter::once(Comment("Write 'ACCEPT'".into()))
-                // Print ACCEPT
-                .chain(iter::repeat(IncrActive).take('A' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('C' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('C' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('E' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('P' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('T' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .collect()),
+            If(print_string!("ACCEPT").collect()),
             // We have no if/else so we have to explicitly check for REJECT too
             IncrActive,
-            If(iter::once(Comment("Write 'REJECT'".into()))
-                // Print REJECT
-                .chain(iter::repeat(IncrActive).take('R' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('E' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('J' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('E' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('C' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .chain(iter::repeat(IncrActive).take('T' as usize))
-                .chain(vec![PrintActive, PushZero, PopToActive])
-                .collect()),
+            If(print_string!("REJECT").collect()),
             PrintState, // Debugging
         ])
         .collect()
@@ -200,6 +206,7 @@ impl Compile for State {
 
         // Setup logic for switching on the head char
         vec![
+            Comment(format!("Check state {}", self.id)),
             DecrActive, // Step "up" to the next state ID that we're checking
             If(
                 // State body
@@ -213,6 +220,7 @@ impl Compile for State {
                     // Reset to 0
                     PushZero,
                     PopToActive,
+                    state_comment!("0", "Head", ["Left tape", "...Right tape"]),
                 ]
                 .into_iter()
                 // Generate a big list of Ifs, one for each transition
@@ -242,6 +250,10 @@ impl Compile for State {
                     Swap,
                     IncrActive, // In case Head char == 0
                     // This loop will never run more than once!
+                    Comment(
+                        "HALT transition check - this While is really an If>0"
+                            .into(),
+                    ),
                     While(
                         vec![
                             DecrActive,  /* Undo the Incr now that we know
@@ -256,26 +268,30 @@ impl Compile for State {
                             // because our output contract specifies that.
                             PushZero,
                             PopToActive,
-                            Swap,
-                            PushZero,
-                            PopToActive,
+                            SaveActive,
                         ]
                         .into_iter()
                         // Push the HALT condition
                         .chain(if self.accepting {
-                            vec![PushZero] // Push 0 for ACCEPT
+                            vec![Comment("Push 0 for ACCEPT".into()), PushZero]
                         } else {
-                            // Push -1 for REJECT
-                            vec![DecrActive, PushActive, IncrActive]
+                            vec![
+                                Comment("Push -1 for REJECT".into()),
+                                DecrActive,
+                                PushActive,
+                                IncrActive,
+                            ]
                         })
                         .collect(),
                     ),
+                    SaveActive,
                     /* var_a: 0
                      * var_i: 0
                      * - Next state # (or 0 for ACCEPT, -1 for REJECT)
                      * - Left tape (encoded)
                      * - Head char
                      * - ...Right tape */
+                    PrintState,
                 ])
                 .collect(),
             ),
@@ -338,9 +354,15 @@ impl Compile for [Transition] {
                 let mut instrs = Vec::new();
 
                 if let Some(transition) = keyed_by_char.get(&(c as char)) {
-                    instrs.push(If(transition.compile()));
+                    instrs.append(&mut vec![
+                        Comment(format!("Transition for char={}", c)),
+                        If(transition.compile()),
+                    ]);
                 }
-                instrs.push(IncrActive);
+                instrs.push(InlineComment(
+                    box IncrActive,
+                    format!("Incr for transition char={}", c + 1),
+                ));
                 instrs
             })
             .flatten()
@@ -378,20 +400,24 @@ impl Compile for Transition {
             PopToActive, // Pop left tape
             Swap,
             PushActive, // Push head char
+            state_comment!("FREE", "Left tape", ["Head", "...Right tape"]),
         ]
         .into_iter()
         .chain(self.tape_instruction.compile())
         .chain(vec![
+            state_comment!(
+                "FREE",
+                "NEW Left tape",
+                ["NEW Head", "...NEW Right tape"]
+            ),
             // Push LT back on the stack
             Swap,
             PushActive,
-            // Reset one variable
+            // Reset both vars to 0
             PushZero,
             PopToActive,
-            Swap,
-            // Reset the other
-            PushZero,
-            PopToActive,
+            SaveActive,
+            state_comment!("0", "0", ["Left tape", "Head", "...Right tape"]),
         ])
         // var_a: 0
         // var_i: 0
@@ -399,8 +425,9 @@ impl Compile for Transition {
         // - Head char
         // - ...Right tape
         // Set the next state and push it onto the stack.
+        .chain(vec![Comment(format!("Set next state={}", self.next_state))])
         .chain(iter::repeat(IncrActive).take(self.next_state))
-        .chain(vec![PushActive, PushZero, PopToActive])
+        .chain(vec![PushActive, PushZero, PopToActive, DecrActive, Swap])
         .collect()
     }
 }
@@ -492,29 +519,46 @@ impl Compile for TapeInstruction {
             ])
             .collect(),
 
-            TapeInstruction::Right => iter::repeat(vec![
-                Comment("Move right".into()),
-                // Similar to left shift, we have to do some tedious math to
-                // add a char to the left tape.
-                // First, we need to free up the bottom n bits in the left
-                // tape, where n is the number of bits in a
-                // char. Just do LT << n. Oh wait... we don't
-                // have bit ops. Let's do LT * 2^n. Shit. Don't
-                // have that either. Guess we have to add LT to itself
-                // (2^n)-1 times. Seems tractable enough.
+            TapeInstruction::Right => {
+                vec![Comment("Move right".into())]
+                    .into_iter()
+                    .chain(
+                        iter::repeat(vec![
+                            // Similar to left shift, we have to do some
+                            // tedious math to add
+                            // a char to the left tape. First, we need
+                            // to free up the bottom n bits in the left tape,
+                            // where
+                            // n is the number of bits in a char. Just do LT <<
+                            // n. Oh wait... we
+                            // don't have bit ops. Let's do LT * 2^n.
+                            // Shit. Don't have that either. Guess we have to
+                            // add LT to itself
+                            // (2^n)-1 times. Seems tractable enough.
 
-                // Load LT into var_a
-                Swap,
-                SaveActive,
-                // Add LT to var_i
-                While(vec![DecrActive, Swap, IncrActive, Swap]),
-            ])
-            .take((ALPHABET_SIZE - 1) as usize)
-            .flatten()
-            // Now put the head char back in var_a, then add its value to the
-            // lowest n bits of the left tape
-            .chain(vec![Swap, While(vec![DecrActive, Swap, IncrActive, Swap])])
-            .collect(),
+                            // Load LT into var_a
+                            Swap,
+                            SaveActive,
+                            // Add LT to var_i
+                            While(vec![DecrActive, Swap, IncrActive, Swap]),
+                        ])
+                        .take((ALPHABET_SIZE - 1) as usize)
+                        .flatten(),
+                    )
+                    // Now put the head char back in var_a, then add its value
+                    // to the lowest n bits of the left tape
+                    .chain(vec![
+                        state_comment!(
+                            "0",
+                            "Left tape",
+                            ["Head", "...Right tape"]
+                        ),
+                        Comment("Add old head to left tape".into()),
+                        PopToActive,
+                        While(vec![DecrActive, Swap, IncrActive, Swap]),
+                    ])
+                    .collect()
+            }
 
             TapeInstruction::Write(c) => {
                 // Pop the head char to var_a, then reset to 0

@@ -132,7 +132,7 @@ impl SmInstruction {
             }
             SmInstruction::Comment(comment) => write!(f, "// {}", comment),
             SmInstruction::InlineComment(instr, comment) => {
-                instr.fmt_indented(f, indents + 1)?;
+                instr.fmt_indented(f, 0)?;
                 write!(f, " // {}", comment)
             }
             // By default just use the debug name
@@ -212,10 +212,15 @@ impl StackMachine {
                 }
             }
             SmInstruction::PrintState => {
-                let to_write = format!(
-                    "\nActive: {}\nInactive: {}\nStack: {:?}\n",
-                    self.active_var, self.inactive_var, self.stack
+                let mut to_write = format!(
+                    "\nActive: {}\nInactive: {}\n",
+                    self.active_var, self.inactive_var,
                 );
+                to_write.push_str("+-----+\n");
+                for e in self.stack.iter().rev() {
+                    to_write.push_str(&format!("| {:3} |\n", e));
+                }
+                to_write.push_str("+-----+\n");
                 match writer.write_all(to_write.as_bytes()) {
                     Ok(()) => {}
                     Err(error) => {
@@ -225,6 +230,7 @@ impl StackMachine {
                         ));
                     }
                 }
+                writer.flush().unwrap();
             }
             SmInstruction::IncrActive => {
                 self.active_var += 1;
@@ -435,7 +441,7 @@ mod tests {
         // Comment does nothing
         run_machine(
             &mut sm,
-            &[InlineComment(Box::new(IncrActive), "Comment!".into())],
+            &[InlineComment(box IncrActive, "Comment!".into())],
         );
         assert_eq!(sm.active_var, 1);
         assert_eq!(sm.inactive_var, 0);
