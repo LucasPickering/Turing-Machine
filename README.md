@@ -12,3 +12,7 @@ First, install rustup (Google it). Then:
 ```
 rustup component add clippy-preview rustfmt-preview rust-analysis rust-src rls
 ```
+
+## Status
+
+This thing is intractably slow. Left shift is probably broken because it's untested. Might come back to this at some point.
