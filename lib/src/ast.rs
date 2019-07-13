@@ -1,3 +1,4 @@
+use ascii::AsciiChar;
 use serde::{Deserialize, Serialize};
 
 /// Number of bits used to represent one character in our alphabet.
@@ -7,6 +8,9 @@ pub const CHAR_SIZE_BITS: usize = 7;
 
 /// The number of characters that our machine can recognize.
 pub const ALPHABET_SIZE: u8 = 1 << CHAR_SIZE_BITS; // 1 << n == 2^n
+
+/// The empty char in our language. This char is prohibited in the input.
+pub const BLANK_CHAR: AsciiChar = AsciiChar::Null;
 
 pub type StateId = usize;
 
@@ -20,7 +24,7 @@ pub type StateId = usize;
 pub enum TapeInstruction {
     Left,
     Right,
-    Write(char),
+    Write(AsciiChar),
 }
 
 /// One transition, defined by a (state, char) pair. This consists of a tape
@@ -28,7 +32,7 @@ pub enum TapeInstruction {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Transition {
     /// The character on the tape that triggers this transition
-    pub match_char: char,
+    pub match_char: AsciiChar,
     /// The instruction to execute on the tape (L/R/W)
     pub tape_instruction: TapeInstruction,
     /// The state to transition to next

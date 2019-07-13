@@ -33,7 +33,8 @@ enum Opt {
 
 fn tm_from_file(path: &PathBuf) -> Result<TuringMachine, Error> {
     let contents = fs::read_to_string(path)?;
-    TuringMachine::from_json(&contents)
+    let program = serde_json::from_str(&contents)?;
+    TuringMachine::new(program)
 }
 
 fn tm_to_file(tm: &TuringMachine, path: &PathBuf) -> Result<(), Error> {
@@ -49,7 +50,7 @@ fn run(opt: Opt) -> Result<(), Error> {
             tape_input,
         } => {
             let tm = tm_from_file(&input_file)?;
-            tm.run(tape_input)?;
+            tm.run(&tape_input)?;
             Ok(())
         }
         Opt::Compile {

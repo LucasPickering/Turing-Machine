@@ -1,15 +1,17 @@
 use crate::{
-    ast::Program,
+    ast::{Program, BLANK_CHAR},
     compile::Compile,
+    error::RuntimeError,
     stack::{SmInstruction, StackMachine},
-    utils::validate_char,
     validate::Validate,
 };
+use ascii::AsciiString;
 use failure::Error;
 use serde::Serialize;
 use std::{
     fmt::{self, Display, Formatter},
     io::{self, Write},
+    str::FromStr,
 };
 
 /// A Turing machine built entirely on Rocketlang's stack machine. This proves
@@ -42,36 +44,35 @@ impl TuringMachine {
         })
     }
 
-    pub fn from_json(json: &str) -> Result<Self, Error> {
-        let program = serde_json::from_str(&json)?;
-        Self::new(program)
-    }
-
     /// Helper function to execute the machine with the given input string and
     /// output destination.
     fn run_with_io<W: Write>(
         &self,
-        input: String,
+        input: &str,
         output: &mut W,
     ) -> Result<(), Error> {
-        for c in input.chars() {
-            validate_char(c)?;
+        let ascii_str = AsciiString::from_str(&input)?;
+
+        for c in ascii_str.chars() {
+            if *c == BLANK_CHAR {
+                return Err(RuntimeError::BlankCharInInput.into());
+            }
         }
 
         let mut machine = StackMachine::new();
-        machine.run(input.as_bytes(), output, &self.instructions);
+        machine.run(ascii_str.as_bytes(), output, &self.instructions);
         Ok(())
     }
 
     /// Executes this machine on the given input. Uses stdout as the output
     /// stream.
-    pub fn run(&self, input: String) -> Result<(), Error> {
+    pub fn run(&self, input: &str) -> Result<(), Error> {
         self.run_with_io(input, &mut io::stdout())
     }
 
     /// Executes this machine on the given input. Returns a byte vector that
     /// contains all of the output from the machine.
-    pub fn run_with_output(&self, input: String) -> Result<Vec<u8>, Error> {
+    pub fn run_with_output(&self, input: &str) -> Result<Vec<u8>, Error> {
         let mut output_buffer = Vec::new();
         self.run_with_io(input, &mut output_buffer)?;
         Ok(output_buffer)
@@ -94,6 +95,7 @@ mod tests {
         ast::{State, TapeInstruction, Transition},
         utils::assert_error,
     };
+    use ascii::AsciiChar;
 
     fn assert_tm(
         tm: &TuringMachine,
@@ -101,14 +103,15 @@ mod tests {
         should_accept: bool,
     ) -> Result<(), Error> {
         // We have to reverse the input cause TMing is hard
-        let output = tm.run_with_output(input.chars().rev().collect())?;
-        let output_string = String::from_utf8(output).unwrap();
+        let output =
+            tm.run_with_output(&input.chars().rev().collect::<String>())?;
+        let output_string = AsciiString::from_ascii(output).unwrap();
         let expected_output = if should_accept { "ACCEPT" } else { "REJECT" };
         assert!(
-            output_string.ends_with(expected_output),
+            output_string.trim().as_str().ends_with(expected_output),
             "TM returned wrong output. Expected \"{}\", got:\n{}",
             expected_output,
-            output_string
+            output_string,
         );
         Ok(())
     }
@@ -128,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn test_null_in_input_error() {
+    fn test_blank_in_input_error() {
         let tm = TuringMachine::new(Program {
             states: vec![State {
                 id: 1,
@@ -138,7 +141,7 @@ mod tests {
             }],
         })
         .unwrap();
-        assert_error("Illegal character: \x00", tm.run("\x00".into()));
+        assert_error("Blank char in input", tm.run("\x00"));
     }
 
     #[test]
@@ -152,7 +155,7 @@ mod tests {
             }],
         })
         .unwrap();
-        assert_error("Illegal character: \u{80}", tm.run("\u{80}".into()));
+        assert_error("the byte at index 0 is not ASCII", tm.run("\u{80}"));
     }
 
     #[test]
@@ -165,7 +168,7 @@ mod tests {
                     initial: true,
                     accepting: false,
                     transitions: vec![Transition {
-                        match_char: 'f',
+                        match_char: AsciiChar::f,
                         tape_instruction: TapeInstruction::Right,
                         next_state: 2,
                     }],
@@ -175,7 +178,7 @@ mod tests {
                     initial: false,
                     accepting: false,
                     transitions: vec![Transition {
-                        match_char: 'o',
+                        match_char: AsciiChar::o,
                         tape_instruction: TapeInstruction::Right,
                         next_state: 3,
                     }],
@@ -185,7 +188,7 @@ mod tests {
                     initial: false,
                     accepting: false,
                     transitions: vec![Transition {
-                        match_char: 'o',
+                        match_char: AsciiChar::o,
                         tape_instruction: TapeInstruction::Right,
                         next_state: 4,
                     }],
@@ -193,12 +196,25 @@ mod tests {
                 State {
                     id: 4,
                     initial: false,
+                    accepting: false,
+                    transitions: vec![Transition {
+                        match_char: AsciiChar::Null,
+                        tape_instruction: TapeInstruction::Right,
+                        next_state: 5,
+                    }],
+                },
+                State {
+                    id: 5,
+                    initial: false,
                     accepting: true,
                     transitions: vec![],
                 },
             ],
         })
         .unwrap();
-        assert_tm(&tm, "foo", true)
+
+        assert_tm(&tm, "foo", true)?;
+        assert_tm(&tm, "food", false)?;
+        Ok(())
     }
 }

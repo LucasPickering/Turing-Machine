@@ -1,7 +1,6 @@
 use crate::{
-    ast::{Program, State, StateId, TapeInstruction, Transition},
+    ast::{Program, State, StateId,  Transition},
     error::{CompilerError, CompilerErrors},
-    utils::validate_char,
 };
 use failure::Error;
 use std::{
@@ -127,34 +126,9 @@ impl Validate for Transition {
     fn validate(&self, context: &Self::Context) -> Vec<CompilerError> {
         let mut errors = Vec::new();
 
-        // Validate the match char
-        if let Err(error) = validate_char(self.match_char) {
-            errors.push(error);
-        }
-
         // Validate the next state ID
         if !context.0.contains(&self.next_state) {
             errors.push(CompilerError::UndefinedState(self.next_state));
-        }
-
-        // Validate the transition
-        errors.append(&mut self.tape_instruction.validate(&()));
-
-        errors
-    }
-}
-
-impl Validate for TapeInstruction {
-    type Context = ();
-
-    fn validate(&self, _context: &Self::Context) -> Vec<CompilerError> {
-        let mut errors = Vec::new();
-
-        // If this is a write, validate the char
-        if let TapeInstruction::Write(c) = self {
-            if let Err(error) = validate_char(*c) {
-                errors.push(error);
-            }
         }
 
         errors
@@ -165,6 +139,7 @@ impl Validate for TapeInstruction {
 mod tests {
     use super::*;
     use crate::{ast::TapeInstruction, utils::assert_error};
+    use ascii::AsciiChar;
 
     #[test]
     fn test_invalid_state_id_error() {
@@ -246,7 +221,7 @@ mod tests {
                 initial: true,
                 accepting: true,
                 transitions: vec![Transition {
-                    match_char: 'a',
+                    match_char: AsciiChar::a,
                     tape_instruction: TapeInstruction::Left,
                     next_state: 2, // Invalid
                 }],
@@ -254,77 +229,5 @@ mod tests {
         }
         .validate_into(&());
         assert_error("Undefined state: 2", result);
-    }
-
-    #[test]
-    fn test_match_char_zero_error() {
-        let result = Program {
-            states: vec![State {
-                id: 1,
-                initial: true,
-                accepting: true,
-                transitions: vec![Transition {
-                    match_char: '\x00', // Invalid
-                    tape_instruction: TapeInstruction::Left,
-                    next_state: 1,
-                }],
-            }],
-        }
-        .validate_into(&());
-        assert_error("Illegal character: \x00", result);
-    }
-
-    #[test]
-    fn test_match_char_too_large_error() {
-        let result = Program {
-            states: vec![State {
-                id: 1,
-                initial: true,
-                accepting: true,
-                transitions: vec![Transition {
-                    match_char: '\u{80}', // 128 - Invalid
-                    tape_instruction: TapeInstruction::Left,
-                    next_state: 1,
-                }],
-            }],
-        }
-        .validate_into(&());
-        assert_error("Illegal character: \u{80}", result);
-    }
-
-    #[test]
-    fn test_write_char_zero_error() {
-        let result = Program {
-            states: vec![State {
-                id: 1,
-                initial: true,
-                accepting: true,
-                transitions: vec![Transition {
-                    match_char: 'a', // Invalid
-                    tape_instruction: TapeInstruction::Write('\x00'),
-                    next_state: 1,
-                }],
-            }],
-        }
-        .validate_into(&());
-        assert_error("Illegal character: \x00", result);
-    }
-
-    #[test]
-    fn test_write_char_too_large_error() {
-        let result = Program {
-            states: vec![State {
-                id: 1,
-                initial: true,
-                accepting: true,
-                transitions: vec![Transition {
-                    match_char: 'a',
-                    tape_instruction: TapeInstruction::Write('\u{80}'),
-                    next_state: 1,
-                }],
-            }],
-        }
-        .validate_into(&());
-        assert_error("Illegal character: \u{80}", result);
     }
 }

@@ -37,6 +37,7 @@ impl ToRocketlang for SmInstruction {
             SmInstruction::InlineComment(subinstr, _) => {
                 subinstr.to_rocketlang()
             }
+            SmInstruction::DebugPrint(_,_) => String::new(),
         }
     }
 }

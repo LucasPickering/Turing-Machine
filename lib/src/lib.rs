@@ -9,4 +9,5 @@ mod turing;
 mod utils;
 mod validate;
 
+pub use ast::Program;
 pub use turing::TuringMachine;

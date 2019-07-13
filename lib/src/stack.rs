@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::{
     fmt::{self, Display, Formatter},
-    io::{Bytes, Read, Write},
+    io::{self, Bytes, Read, Write},
 };
 
 /// The size of each register. For tape encoding, we're using 7 bits per char,
@@ -84,6 +84,9 @@ pub enum SmInstruction {
     /// These comments will need to be stripped before passing the source to
     /// the Rocketlang interpreter.
     InlineComment(Box<Self>, String),
+
+    /// Prints a string to stdout.
+    DebugPrint(String, bool),
 }
 
 impl SmInstruction {
@@ -175,6 +178,22 @@ impl StackMachine {
         }
     }
 
+    fn write_stack<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(
+            format!(
+                "Active: {}\nInactive: {}\n",
+                self.active_var, self.inactive_var,
+            )
+            .as_bytes(),
+        )?;
+        writer.write_all("-----\n".as_bytes())?;
+        for e in self.stack.iter().rev() {
+            writer.write_all(&format!("- {}\n", e).as_bytes())?;
+        }
+        writer.write_all("\n".as_bytes())?;
+        Ok(())
+    }
+
     /// Runs a single instruction on this machine.
     fn run_instruction<R: Read, W: Write>(
         &mut self,
@@ -199,8 +218,8 @@ impl StackMachine {
                 }
             }
             SmInstruction::PrintActive => {
-                // Write the lowest 4 bytes, to represent a Unicode char
-                let to_write = &self.active_var.to_be_bytes()[4..];
+                // Write the lowest byte, to represent an ASCII char
+                let to_write = &self.active_var.to_be_bytes()[7..];
                 match writer.write_all(to_write) {
                     Ok(()) => {}
                     Err(error) => {
@@ -211,27 +230,12 @@ impl StackMachine {
                     }
                 }
             }
-            SmInstruction::PrintState => {
-                let mut to_write = format!(
-                    "\nActive: {}\nInactive: {}\n",
-                    self.active_var, self.inactive_var,
-                );
-                to_write.push_str("+-----+\n");
-                for e in self.stack.iter().rev() {
-                    to_write.push_str(&format!("| {:3} |\n", e));
+            SmInstruction::PrintState => match self.write_stack(writer) {
+                Ok(()) => {}
+                Err(error) => {
+                    self.error_if_enabled(&format!("Write error: {}", error));
                 }
-                to_write.push_str("+-----+\n");
-                match writer.write_all(to_write.as_bytes()) {
-                    Ok(()) => {}
-                    Err(error) => {
-                        self.error_if_enabled(&format!(
-                            "Write error: {}",
-                            error
-                        ));
-                    }
-                }
-                writer.flush().unwrap();
-            }
+            },
             SmInstruction::IncrActive => {
                 self.active_var += 1;
             }
@@ -280,6 +284,12 @@ impl StackMachine {
             SmInstruction::Comment(_) => {}
             SmInstruction::InlineComment(subinstr, _) => {
                 self.run_instruction(reader, writer, subinstr)
+            }
+            SmInstruction::DebugPrint(msg, print_stack) => {
+                println!("[DEBUG] {}", &msg);
+                if *print_stack {
+                    self.write_stack(&mut io::stdout()).unwrap();
+                }
             }
         }
     }

@@ -18,14 +18,18 @@ pub enum CompilerError {
     MultipleInitialStates(Vec<StateId>),
     #[fail(display = "Undefined state: {}", 0)]
     UndefinedState(StateId),
-    #[fail(display = "Illegal character: {}", 0)]
-    IllegalCharacter(char),
 }
 
 /// Container for holding multiple compiler errors. This is the most common way
 /// to report errors.
 #[derive(Debug, Fail)]
 pub struct CompilerErrors(Vec<CompilerError>);
+
+#[derive(Debug, Fail)]
+pub enum RuntimeError {
+    #[fail(display = "Blank char in input")]
+    BlankCharInInput,
+}
 
 impl CompilerErrors {
     pub fn new(errors: Vec<CompilerError>) -> Self {

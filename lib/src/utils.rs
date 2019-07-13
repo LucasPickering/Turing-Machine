@@ -1,14 +1,3 @@
-use crate::{ast::ALPHABET_SIZE, error::CompilerError};
-
-pub fn validate_char(c: char) -> Result<(), CompilerError> {
-    // Cast both to usize to make sure we don't truncate the character
-    if c == '\x00' || c as usize >= ALPHABET_SIZE as usize {
-        Err(CompilerError::IllegalCharacter(c))
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use failure::Error;

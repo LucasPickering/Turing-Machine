@@ -3,6 +3,7 @@ use crate::{
     stack::SmInstruction::{self, *},
     validate::Valid,
 };
+use ascii::AsciiChar;
 use itertools::Itertools;
 use std::{collections::HashMap, iter};
 
@@ -157,12 +158,14 @@ impl Compile for Valid<Program> {
             // - Left tape (encoded)
             // - Head char
             // - ...Right tape
+            // Mostly here just so the instructions aren't "unused"
+            PrintState,
+            DebugPrint("Checking result".into(), false),
             // Check for ACCEPT
             If(print_string!("ACCEPT").collect()),
             // We have no if/else so we have to explicitly check for REJECT too
             IncrActive,
             If(print_string!("REJECT").collect()),
-            PrintState, // Debugging
         ])
         .collect()
     }
@@ -256,8 +259,8 @@ impl Compile for State {
                     ),
                     While(
                         vec![
-                            DecrActive,  /* Undo the Incr now that we know
-                                          * we entered */
+                            // Undo the Incr now that we know we entered
+                            DecrActive,
                             Swap,        // var_a is free now
                             PopToActive, // Pop LT
                             Swap,        // var_a = HC, var_i = LT
@@ -291,7 +294,6 @@ impl Compile for State {
                      * - Left tape (encoded)
                      * - Head char
                      * - ...Right tape */
-                    PrintState,
                 ])
                 .collect(),
             ),
@@ -338,7 +340,7 @@ impl Compile for [Transition] {
         // to decr from the head char, but then we're trashing it unnecessarily
         // and need to include extra Incrs to get it back.
 
-        let keyed_by_char: HashMap<char, &Transition> = self
+        let keyed_by_char: HashMap<AsciiChar, &Transition> = self
             .iter()
             .map(|transition| (transition.match_char, transition))
             .collect();
@@ -353,7 +355,11 @@ impl Compile for [Transition] {
                 // just add an Incr and move on.
                 let mut instrs = Vec::new();
 
-                if let Some(transition) = keyed_by_char.get(&(c as char)) {
+                // This to-char conversion should never fail because we're
+                // only doing this for valid ASCII chars.
+                if let Some(transition) =
+                    keyed_by_char.get(&AsciiChar::from(c).unwrap())
+                {
                     instrs.append(&mut vec![
                         Comment(format!("Transition for char={}", c)),
                         If(transition.compile()),
@@ -520,40 +526,44 @@ impl Compile for TapeInstruction {
             .collect(),
 
             TapeInstruction::Right => {
-                vec![Comment("Move right".into())]
+                // Similar to left shift, we have to do some tedious math to add
+                // a char to the left tape. First, we need to free up the bottom
+                // n bits in the left tape, where n is the number of bits in a
+                // char. Just do LT << n. Oh wait... we don't have bit ops.
+                // Let's do LT * 2^n. Shit. Don't have that either. Guess we
+                // have to add LT to itself (2^n)-1 times. Seems tractable
+                // enough.
+
+                // We need to save a copy of the original value of LT because
+                // we'll be adding it over and over again. Call this LT_O
+                vec![Comment("Move right".into()), Swap, PushActive]
                     .into_iter()
                     .chain(
+                        // State before each While loop:
+                        // var_a: Left tape original
+                        // var_i: Left tape (partially divided)
+                        // - Left tape original
+                        // - ...Right tape
                         iter::repeat(vec![
-                            // Similar to left shift, we have to do some
-                            // tedious math to add
-                            // a char to the left tape. First, we need
-                            // to free up the bottom n bits in the left tape,
-                            // where
-                            // n is the number of bits in a char. Just do LT <<
-                            // n. Oh wait... we
-                            // don't have bit ops. Let's do LT * 2^n.
-                            // Shit. Don't have that either. Guess we have to
-                            // add LT to itself
-                            // (2^n)-1 times. Seems tractable enough.
-
-                            // Load LT into var_a
-                            Swap,
-                            SaveActive,
-                            // Add LT to var_i
+                            // Add LT_O to var_i
                             While(vec![DecrActive, Swap, IncrActive, Swap]),
+                            // Reload LT_O from the stack into var_a
+                            PopToActive,
+                            PushActive,
                         ])
                         .take((ALPHABET_SIZE - 1) as usize)
                         .flatten(),
                     )
-                    // Now put the head char back in var_a, then add its value
-                    // to the lowest n bits of the left tape
+                    // Now get rid of LT_O and put the head char back in var_a,
+                    // then add its value to the lowest n  bits of the left tape
                     .chain(vec![
                         state_comment!(
                             "0",
                             "Left tape",
-                            ["Head", "...Right tape"]
+                            ["Left tape original", "Head", "...Right tape"]
                         ),
                         Comment("Add old head to left tape".into()),
+                        PopToActive, // Pop off LT_O
                         PopToActive,
                         While(vec![DecrActive, Swap, IncrActive, Swap]),
                     ])
