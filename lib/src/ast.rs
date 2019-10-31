@@ -46,8 +46,10 @@ pub struct State {
     pub id: StateId,
     /// Is this the initial state? Should be true for exactly one state in
     /// a machine.
+    #[serde(default)]
     pub initial: bool,
     /// Is this an accepting state?
+    #[serde(default)]
     pub accepting: bool,
     /// All transitions that can be made from this state
     pub transitions: Vec<Transition>,
