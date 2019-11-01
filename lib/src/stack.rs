@@ -194,6 +194,96 @@ impl StackMachine {
         Ok(())
     }
 
+    fn read_to_active<R: Read>(&mut self, reader: &mut Bytes<R>) {
+        // Read one byte from stdin. If there is nothing to read, do
+        // nothing.
+        if let Some(res_b) = reader.next() {
+            match res_b {
+                Ok(b) => self.active_var = i64::from(b),
+                Err(error) => {
+                    self.error_if_enabled(&format!("Read error: {}", error));
+                }
+            }
+        }
+    }
+
+    fn print_active<W: Write>(&self, writer: &mut W) {
+        let to_write = &self.active_var.to_be_bytes()[7..];
+        match writer.write_all(to_write) {
+            Ok(()) => {}
+            Err(error) => {
+                self.error_if_enabled(&format!("Write error: {}", error));
+            }
+        }
+    }
+
+    fn print_state<W: Write>(&self, writer: &mut W) {
+        match self.write_stack(writer) {
+            Ok(()) => {}
+            Err(error) => {
+                self.error_if_enabled(&format!("Write error: {}", error));
+            }
+        }
+    }
+
+    fn incr(&mut self) {
+        self.active_var += 1;
+    }
+    fn decr(&mut self) {
+        self.active_var -= 1;
+    }
+    fn save_active(&mut self) {
+        self.inactive_var = self.active_var;
+    }
+    fn swap(&mut self) {
+        std::mem::swap(&mut self.active_var, &mut self.inactive_var);
+    }
+    fn push_zero(&mut self) {
+        self.stack.push(0);
+    }
+    fn push_active(&mut self) {
+        self.stack.push(self.active_var);
+    }
+    fn pop_to_active(&mut self) {
+        match self.stack.pop() {
+            Some(val) => {
+                self.active_var = val;
+            }
+            None => {
+                self.error_if_enabled("Pop on empty stack");
+                // If we got here, we know errors are disabled
+                self.active_var = 0;
+            }
+        }
+    }
+    fn toggle_errors(&mut self) {
+        self.errors_enabled = !self.errors_enabled;
+    }
+    fn do_if<R: Read, W: Write>(
+        &mut self,
+        reader: &mut Bytes<R>,
+        writer: &mut W,
+        subinstrs: &[SmInstruction],
+    ) {
+        if self.active_var == self.inactive_var {
+            for subinstr in subinstrs {
+                self.run_instruction(reader, writer, subinstr)
+            }
+        }
+    }
+    fn do_while<R: Read, W: Write>(
+        &mut self,
+        reader: &mut Bytes<R>,
+        writer: &mut W,
+        subinstrs: &[SmInstruction],
+    ) {
+        while self.active_var > 0 {
+            for subinstr in subinstrs {
+                self.run_instruction(reader, writer, subinstr)
+            }
+        }
+    }
+
     /// Runs a single instruction on this machine.
     fn run_instruction<R: Read, W: Write>(
         &mut self,
@@ -201,85 +291,44 @@ impl StackMachine {
         writer: &mut W,
         instruction: &SmInstruction,
     ) {
+        // These are all proxied to functions to make it easier to profile
         match instruction {
-            SmInstruction::ReadToActive => {
-                // Read one byte from stdin. If there is nothing to read, do
-                // nothing.
-                if let Some(res_b) = reader.next() {
-                    match res_b {
-                        Ok(b) => self.active_var = i64::from(b),
-                        Err(error) => {
-                            self.error_if_enabled(&format!(
-                                "Read error: {}",
-                                error
-                            ));
-                        }
-                    }
-                }
-            }
+            SmInstruction::ReadToActive => self.read_to_active(reader),
             SmInstruction::PrintActive => {
-                // Write the lowest byte, to represent an ASCII char
-                let to_write = &self.active_var.to_be_bytes()[7..];
-                match writer.write_all(to_write) {
-                    Ok(()) => {}
-                    Err(error) => {
-                        self.error_if_enabled(&format!(
-                            "Write error: {}",
-                            error
-                        ));
-                    }
-                }
+                self.print_active(writer);
             }
-            SmInstruction::PrintState => match self.write_stack(writer) {
-                Ok(()) => {}
-                Err(error) => {
-                    self.error_if_enabled(&format!("Write error: {}", error));
-                }
-            },
+            SmInstruction::PrintState => {
+                self.print_state(writer);
+            }
             SmInstruction::IncrActive => {
-                self.active_var += 1;
+                self.incr();
             }
             SmInstruction::DecrActive => {
-                self.active_var -= 1;
+                self.decr();
             }
             SmInstruction::SaveActive => {
-                self.inactive_var = self.active_var;
+                self.save_active();
             }
             SmInstruction::Swap => {
-                std::mem::swap(&mut self.active_var, &mut self.inactive_var);
+                self.swap();
             }
             SmInstruction::PushZero => {
-                self.stack.push(0);
+                self.push_zero();
             }
             SmInstruction::PushActive => {
-                self.stack.push(self.active_var);
+                self.push_active();
             }
-            SmInstruction::PopToActive => match self.stack.pop() {
-                Some(val) => {
-                    self.active_var = val;
-                }
-                None => {
-                    self.error_if_enabled("Pop on empty stack");
-                    // If we got here, we know errors are disabled
-                    self.active_var = 0;
-                }
-            },
+            SmInstruction::PopToActive => {
+                self.pop_to_active();
+            }
             SmInstruction::ToggleErrors => {
-                self.errors_enabled = !self.errors_enabled;
+                self.toggle_errors();
             }
             SmInstruction::If(subinstrs) => {
-                if self.active_var == self.inactive_var {
-                    for subinstr in subinstrs {
-                        self.run_instruction(reader, writer, subinstr)
-                    }
-                }
+                self.do_if(reader, writer, subinstrs)
             }
             SmInstruction::While(subinstrs) => {
-                while self.active_var > 0 {
-                    for subinstr in subinstrs {
-                        self.run_instruction(reader, writer, subinstr)
-                    }
-                }
+                self.do_while(reader, writer, subinstrs);
             }
             SmInstruction::Comment(_) => {}
             SmInstruction::InlineComment(subinstr, _) => {

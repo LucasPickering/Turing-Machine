@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn test_simple_machine() -> Result<(), Error> {
         // Machine matches the string "foo"
-        let tm = TuringMachine::new(Program {
+        let program = Program {
             states: vec![
                 State {
                     id: 1,
@@ -210,8 +210,8 @@ mod tests {
                     transitions: vec![],
                 },
             ],
-        })
-        .unwrap();
+        };
+        let tm = TuringMachine::new(program).unwrap();
 
         assert_tm(&tm, "foo", true)?;
         assert_tm(&tm, "food", false)?;
